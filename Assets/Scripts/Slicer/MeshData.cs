@@ -42,6 +42,22 @@ namespace Popcorn.Slicer
 			vertices.Add(vertex);
 		}
 
+		public void AddVertex(Vector3 vertex, Vector3 normal, Vector2 uv, Vector4 tangent)
+		{
+			vertices.Add(vertex);
+			normals.Add(normal);
+			uvs.Add(uv);
+			tangents.Add(tangent);
+		}
+
+		public void AddVertex(Vertex vertex)
+		{
+			vertices.Add(vertex.Pos);
+			normals.Add(vertex.Norm);
+			uvs.Add(vertex.UV);
+			tangents.Add(vertex.Tan);
+		}
+
 		public Vertex GetVertexAt(int index)
 		{
 			Vector3 pos = vertices[index];
@@ -50,14 +66,6 @@ namespace Popcorn.Slicer
 			Vector4 tan = tangents[index];
 		
 			return new Vertex(pos, norm, uv, tan);
-		}
-
-		public void AddVertex(Vector3 vertex, Vector3 normal, Vector2 uv, Vector4 tangent)
-		{
-			vertices.Add(vertex);
-			normals.Add(normal);
-			uvs.Add(uv);
-			tangents.Add(tangent);
 		}
 
 		public void AddTriangle(Triangle triangle)
