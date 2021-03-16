@@ -53,18 +53,28 @@ namespace Popcorn.Slicer
 		public void AddVertex(Vertex vertex)
 		{
 			vertices.Add(vertex.Pos);
-			normals.Add(vertex.Norm);
-			uvs.Add(vertex.UV);
-			tangents.Add(vertex.Tan);
+
+			if(vertex.Norm.HasValue)
+			{
+				normals.Add(vertex.Norm.Value);
+			}
+			if (vertex.UV.HasValue)
+			{
+				uvs.Add(vertex.UV.Value);
+			}
+			if (vertex.Tan.HasValue)
+			{
+				tangents.Add(vertex.Tan.Value);
+			}
 		}
 
 		public Vertex GetVertexAt(int index)
 		{
 			Vector3 pos = vertices[index];
-			Vector3 norm = normals[index];
-			Vector2 uv = uvs[index];
-			Vector4 tan = tangents[index];
-		
+			Vector3? norm = index < normals.Count ? (Vector3?)normals[index] : null;
+			Vector2? uv = index < uvs.Count ? (Vector2?)uvs[index] : null;
+			Vector4? tan = index < tangents.Count ? (Vector4?)tangents[index] : null;
+
 			return new Vertex(pos, norm, uv, tan);
 		}
 

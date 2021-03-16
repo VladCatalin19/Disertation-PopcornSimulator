@@ -150,14 +150,7 @@ namespace Popcorn.Slicer
 		private static int AddInterpolatedVertedToMeshDataAndGetIndex(
 			MeshData meshData, Vertex v0, Vertex v1, float t)
 		{
-			Vector3 vertex = Vector3.Lerp(v0.Pos, v1.Pos, t);
-			Vector3 normal = Vector3.Lerp(v0.Norm, v1.Norm, t);
-			Vector2 uv = Vector2.Lerp(v0.UV, v1.UV, t);
-			Vector4 tangent = Vector4.Lerp(v0.Tan, v1.Tan, t);
-
-			int index = meshData.Vertices.Count;
-			meshData.AddVertex(vertex, normal, uv, tangent);
-			return index;			
+			return AddCopyOfVertexToMeshDataAndGetIndex(meshData, Vertex.Lerp(v0, v1, t));
 		}
 
 		private static bool IsTriangleIntersectingPlane(Plane.Side s0, Plane.Side s1, Plane.Side s2)

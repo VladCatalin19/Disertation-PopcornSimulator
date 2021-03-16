@@ -22,6 +22,6 @@ public class PopcornGenerator : MonoBehaviour
 	{
 		Vector3 planeNormal = t.up;
 		Vector3 planeInPoint = t.position;
-		return  new Plane(planeNormal, planeInPoint);
+		return new Plane(planeNormal, planeInPoint);
 	}
 }
