@@ -52,19 +52,19 @@ namespace Popcorn.Slicer
 
 		public void AddVertex(Vertex vertex)
 		{
-			vertices.Add(vertex.Pos);
+			vertices.Add(vertex.Position);
 
-			if(vertex.Norm.HasValue)
+			if(vertex.Normal.HasValue)
 			{
-				normals.Add(vertex.Norm.Value);
+				normals.Add(vertex.Normal.Value);
 			}
 			if (vertex.UV.HasValue)
 			{
 				uvs.Add(vertex.UV.Value);
 			}
-			if (vertex.Tan.HasValue)
+			if (vertex.Tangent.HasValue)
 			{
-				tangents.Add(vertex.Tan.Value);
+				tangents.Add(vertex.Tangent.Value);
 			}
 		}
 
@@ -75,7 +75,28 @@ namespace Popcorn.Slicer
 			Vector2? uv = index < uvs.Count ? (Vector2?)uvs[index] : null;
 			Vector4? tan = index < tangents.Count ? (Vector4?)tangents[index] : null;
 
-			return new Vertex(pos, norm, uv, tan);
+			return new Vertex(pos, norm, uv, tan, index);
+		}
+
+		public void RemoveVertexAt(int index)
+		{
+			if (0 <= index && index < vertices.Count)
+			{
+				vertices.RemoveAt(index);
+
+				if (index < normals.Count)
+				{
+					normals.RemoveAt(index);
+				}
+				if (index < uvs.Count)
+				{
+					uvs.RemoveAt(index);
+				}
+				if (index < tangents.Count)
+				{
+					tangents.RemoveAt(index);
+				}
+			}
 		}
 
 		public void AddTriangle(Triangle triangle)

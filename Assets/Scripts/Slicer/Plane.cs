@@ -4,7 +4,7 @@ namespace Popcorn.Slicer
 {
 	public struct Plane
 	{
-		public enum Side {up, down, on};
+		public enum Side {up, down, on, none};
 
 		private Vector3 normal;
 		private float distance;

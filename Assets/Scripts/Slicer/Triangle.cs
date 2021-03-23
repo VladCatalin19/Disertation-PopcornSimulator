@@ -16,5 +16,19 @@ namespace Popcorn.Slicer
 		public int I0 { get => i0; }
 		public int I1 { get => i1; }
 		public int I2 { get => i2; }
+
+		public int this[int key]
+		{
+			get
+			{
+				switch(key)
+				{
+					case 0: return i0;
+					case 1: return i1;
+					case 2: return i2;
+				}
+				throw new System.IndexOutOfRangeException("Invalid Triangle index");
+			}
+		}
 	}
 }

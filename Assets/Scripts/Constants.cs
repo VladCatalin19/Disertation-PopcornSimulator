@@ -9,6 +9,4 @@ public static class Constants
 	public const string MouseY = "Mouse Y";
 	public const string RunKey = "Sprint";
 	public const string CameraMovementKey = "Fire2";
-
-	public const float SlicerEpsilon = 0.0001f;
 }
