@@ -21,20 +21,63 @@ namespace Popcorn.Slicer
 		{
 			MeshData meshData = new MeshData(mesh);
 
-			TransformMeshVerticesToWorldSpace(meshData, spaceTransform);
+			/*
+			int[] freq = new int[meshData.Vertices.Count];
 
-			var upperZoneCloneIndices = new Dictionary<int, int>();
-			var lowerZoneCloneIndices = new Dictionary<int, int>();
+			foreach (Triangle t in meshData.Triangles)
+			{
+				++freq[t.I0];
+				++freq[t.I1];
+				++freq[t.I2];
+			}
+
+			for (int i = 0; i < freq.Length; ++i)
+			{
+				Debug.Log($"V: {i} Freq: {freq[i]}");
+			}
+			*/
+
+			TransformMeshDataVerticesToWorldSpace(meshData, spaceTransform);
+			SliceMeshTriangles(meshData, cuttingPlanes);
+			DeleteUnusedVertices(meshData);
+			TransformMeshDataVerticesToLocalSpace(meshData, spaceTransform);
+
+			meshData.ToMesh(mesh);
+		}
+
+		private static void TransformMeshDataVerticesToWorldSpace(MeshData meshData, Transform transform)
+		{
+			for (int i = 0; i < meshData.Vertices.Count; ++i)
+			{
+				meshData.Vertices[i] = transform.TransformPoint(meshData.Vertices[i]);
+			}
+		}
+
+		private static void TransformMeshDataVerticesToLocalSpace(MeshData meshData, Transform transform)
+		{
+			for (int i = 0; i < meshData.Vertices.Count; ++i)
+			{
+				meshData.Vertices[i] = transform.InverseTransformPoint(meshData.Vertices[i]);
+			}
+		}
+
+		private static void SliceMeshTriangles(MeshData meshData, UnityEngine.Plane[] cuttingPlanes)
+		{
+			var upperZoneDuplicatedIndices = new Dictionary<IndicesPair, int>();
+			var lowerZoneDuplicatedIndices = new Dictionary<IndicesPair, int>();
 
 			foreach (UnityEngine.Plane planeUnity in cuttingPlanes)
 			{
 				Plane plane = new Plane(planeUnity);
 				int maxTriangleIndex = meshData.Triangles.Count;
 
+				upperZoneDuplicatedIndices.Clear();
+				lowerZoneDuplicatedIndices.Clear();
+
 				for (int i = 0; i < maxTriangleIndex; ++i)
 				{
 					bool shouldDeleteTriangle = SliceTriangleAndAddToMeshData(
-						meshData, i, plane, upperZoneCloneIndices, lowerZoneCloneIndices
+						meshData, i, plane, upperZoneDuplicatedIndices, lowerZoneDuplicatedIndices
 					);
 					if (shouldDeleteTriangle)
 					{
@@ -43,26 +86,6 @@ namespace Popcorn.Slicer
 						--i;
 					}
 				}
-			}
-			DeleteUnusedVertices(meshData);
-
-			TransformMeshVerticesToLocalSpace(meshData, spaceTransform);
-			meshData.ToMesh(mesh);
-		}
-
-		private static void TransformMeshVerticesToWorldSpace(MeshData meshData, Transform transform)
-		{
-			for (int i = 0; i < meshData.Vertices.Count; ++i)
-			{
-				meshData.Vertices[i] = transform.TransformPoint(meshData.Vertices[i]);
-			}
-		}
-
-		private static void TransformMeshVerticesToLocalSpace(MeshData meshData, Transform transform)
-		{
-			for (int i = 0; i < meshData.Vertices.Count; ++i)
-			{
-				meshData.Vertices[i] = transform.InverseTransformPoint(meshData.Vertices[i]);
 			}
 		}
 
@@ -110,7 +133,7 @@ namespace Popcorn.Slicer
 		}
 
 		private static bool SliceTriangleAndAddToMeshData(MeshData meshData, int triangleIndex, Plane plane,
-			IDictionary<int, int> upSideDuplicatedIndices, IDictionary<int, int> downSideDuplicatedIndices)
+			IDictionary<IndicesPair, int> upSideDuplicatedIndices, IDictionary<IndicesPair, int> downSideDuplicatedIndices)
 		{
 			Triangle triangle = meshData.Triangles[triangleIndex];
 			Vertex v0 = meshData.GetVertexAt(triangle.I0);
@@ -155,7 +178,7 @@ namespace Popcorn.Slicer
 
 		private static void DuplicateVertexOnPlaneAndAddTriangleToMeshData(
 			MeshData meshData, Vertex v0, Vertex v1, Vertex v2,
-			IDictionary<int, int> downSideDuplicatedIndices, IDictionary<int, int> upSideDuplicatedIndices
+			IDictionary<IndicesPair, int> downSideDuplicatedIndices, IDictionary<IndicesPair, int> upSideDuplicatedIndices
 		)
 		{
 			Triangle newTriangle = new Triangle();
@@ -197,7 +220,7 @@ namespace Popcorn.Slicer
 
 		private static void DuplicateLineVerticesOnPlaneAndAddTriangleToMeshData(
 			MeshData meshData, Vertex v0, Vertex v1, Vertex v2,
-			IDictionary<int, int> downSideDuplicatedIndices, IDictionary<int, int> upSideDuplicatedIndices
+			IDictionary<IndicesPair, int> downSideDuplicatedIndices, IDictionary<IndicesPair, int> upSideDuplicatedIndices
 		)
 		{
 			Triangle newTriangle = new Triangle();
@@ -245,7 +268,7 @@ namespace Popcorn.Slicer
 
 		private static void CutTriangleInTwoTrianglesWherePlaneIntersectsAndAddThemToMeshData(
 			MeshData meshData, Vertex v0, Vertex v1, Vertex v2,
-			IDictionary<int, int> downSideDuplicatedIndices, IDictionary<int, int> upSideDuplicatedIndices,
+			IDictionary<IndicesPair, int> downSideDuplicatedIndices, IDictionary<IndicesPair, int> upSideDuplicatedIndices,
 			Plane plane
 		)
 		{
@@ -267,8 +290,8 @@ namespace Popcorn.Slicer
 				int v0CopyIndexSameSideAsV1 = GetCopyOfVertexOrCreateDuplicate(meshData, sameSideIndices, v0.TriangleIndex);
 				int v0CopyIndexOtherSideAsV1 = GetCopyOfVertexOrCreateDuplicate(meshData, otherSideIndices, v0.TriangleIndex);
 
-				int v12IndexSameSideOfV1 = AddInterpolatedVertedToMeshDataAndGetIndex(meshData, v1, v2, t);
-				int v12OIndextherSideOfV1 = AddInterpolatedVertedToMeshDataAndGetIndex(meshData, v1, v2, t);
+				int v12IndexSameSideOfV1 = GetCopyOfInterpolatedVertexOrCreateDuplicate(meshData, sameSideIndices, v1.TriangleIndex, v2.TriangleIndex, t);
+				int v12OIndextherSideOfV1 = GetCopyOfInterpolatedVertexOrCreateDuplicate(meshData, otherSideIndices, v1.TriangleIndex, v2.TriangleIndex, t);
 
 				triangle0 = new Triangle(v0CopyIndexSameSideAsV1, v1.TriangleIndex, v12IndexSameSideOfV1);
 				triangle1 = new Triangle(v0CopyIndexOtherSideAsV1, v12OIndextherSideOfV1, v2.TriangleIndex);
@@ -288,8 +311,8 @@ namespace Popcorn.Slicer
 				int i1CopySameSideP0 = GetCopyOfVertexOrCreateDuplicate(meshData, sameSideIndices, v1.TriangleIndex);
 				int i1CopyOtherSideP0 = GetCopyOfVertexOrCreateDuplicate(meshData, otherSideIndices, v1.TriangleIndex);
 
-				int i02SameSideP0 = AddInterpolatedVertedToMeshDataAndGetIndex(meshData, v0, v2, t);
-				int i02OtherSideP0 = AddInterpolatedVertedToMeshDataAndGetIndex(meshData, v0, v2, t);
+				int i02SameSideP0 = GetCopyOfInterpolatedVertexOrCreateDuplicate(meshData, sameSideIndices, v0.TriangleIndex, v2.TriangleIndex, t);
+				int i02OtherSideP0 = GetCopyOfInterpolatedVertexOrCreateDuplicate(meshData, otherSideIndices, v0.TriangleIndex, v2.TriangleIndex, t);
 
 				triangle0 = new Triangle(v0.TriangleIndex, i1CopySameSideP0, i02SameSideP0);
 				triangle1 = new Triangle(i1CopyOtherSideP0, i02OtherSideP0, v2.TriangleIndex);
@@ -309,8 +332,8 @@ namespace Popcorn.Slicer
 				int i2CopySameSideP0 = GetCopyOfVertexOrCreateDuplicate(meshData, sameSideIndices, v2.TriangleIndex);
 				int i2CopyOtherSideP0 = GetCopyOfVertexOrCreateDuplicate(meshData, otherSideIndices, v2.TriangleIndex);
 				
-				int i01SameSideP0 = AddInterpolatedVertedToMeshDataAndGetIndex(meshData, v0, v1, t);
-				int i01OtherSideP0 = AddInterpolatedVertedToMeshDataAndGetIndex(meshData, v0, v1, t);
+				int i01SameSideP0 = GetCopyOfInterpolatedVertexOrCreateDuplicate(meshData, sameSideIndices, v0.TriangleIndex, v1.TriangleIndex, t);
+				int i01OtherSideP0 = GetCopyOfInterpolatedVertexOrCreateDuplicate(meshData, otherSideIndices, v0.TriangleIndex, v1.TriangleIndex, t);
 
 				triangle0 = new Triangle(v0.TriangleIndex, i01SameSideP0, i2CopySameSideP0);
 				triangle1 = new Triangle(i01OtherSideP0, v1.TriangleIndex, i2CopyOtherSideP0);
@@ -321,7 +344,7 @@ namespace Popcorn.Slicer
 
 		private static void CutTriangleInThreeTrianglesWherePlaneIntersetsAndAddThemToMeshData(
 			MeshData meshData, Vertex v0, Vertex v1, Vertex v2,
-			IDictionary<int, int> downSideDuplicatedIndices, IDictionary<int, int> upSideDuplicatedIndices,
+			IDictionary<IndicesPair, int> downSideDuplicatedIndices, IDictionary<IndicesPair, int> upSideDuplicatedIndices,
 			Plane plane
 		)
 		{
@@ -332,8 +355,11 @@ namespace Popcorn.Slicer
 
 			if (v0.PlaneSide != v1.PlaneSide && plane.Raycast(v0.Position, v1.Position, out t))
 			{
-				int i01SameSideP1 = AddInterpolatedVertedToMeshDataAndGetIndex(meshData, v0, v1, t);
-				int i01OtherSideP1 = AddInterpolatedVertedToMeshDataAndGetIndex(meshData, v0, v1, t);
+				var sameSideIndices = v1.PlaneSide == Plane.Side.down ? downSideDuplicatedIndices : upSideDuplicatedIndices;
+				var otherSideIndices = v1.PlaneSide == Plane.Side.down ? upSideDuplicatedIndices : downSideDuplicatedIndices;
+
+				int i01SameSideP1 = GetCopyOfInterpolatedVertexOrCreateDuplicate(meshData, sameSideIndices, v0.TriangleIndex, v1.TriangleIndex, t);
+				int i01OtherSideP1 = GetCopyOfInterpolatedVertexOrCreateDuplicate(meshData, otherSideIndices, v0.TriangleIndex, v1.TriangleIndex, t);
 
 				if (v0.PlaneSide == v2.PlaneSide && plane.Raycast(v1.Position, v2.Position, out t1))
 				{
@@ -343,8 +369,8 @@ namespace Popcorn.Slicer
 					//     /     \
 					//    x-------x
 					//    v2      v0
-					int i12SameSideP1 = AddInterpolatedVertedToMeshDataAndGetIndex(meshData, v1, v2, t1);
-					int i12OtherSideP1 = AddInterpolatedVertedToMeshDataAndGetIndex(meshData, v1, v2, t1);
+					int i12SameSideP1 = GetCopyOfInterpolatedVertexOrCreateDuplicate(meshData, sameSideIndices, v1.TriangleIndex, v2.TriangleIndex, t1);
+					int i12OtherSideP1 = GetCopyOfInterpolatedVertexOrCreateDuplicate(meshData, otherSideIndices, v1.TriangleIndex, v2.TriangleIndex, t1);
 					triangle0 = new Triangle(i01SameSideP1, v1.TriangleIndex, i12SameSideP1);
 					triangle1 = new Triangle(v0.TriangleIndex, i01OtherSideP1, i12OtherSideP1);
 					triangle2 = new Triangle(v0.TriangleIndex, i12OtherSideP1, v2.TriangleIndex);
@@ -357,8 +383,8 @@ namespace Popcorn.Slicer
 					//     /     \
 					//    x-------x
 					//    v1      v2
-					int i02SameSideP1 = AddInterpolatedVertedToMeshDataAndGetIndex(meshData, v0, v2, t1);
-					int i02OtherSideP1 = AddInterpolatedVertedToMeshDataAndGetIndex(meshData, v0, v2, t1);
+					int i02SameSideP1 = GetCopyOfInterpolatedVertexOrCreateDuplicate(meshData, sameSideIndices, v0.TriangleIndex, v2.TriangleIndex, t1);
+					int i02OtherSideP1 = GetCopyOfInterpolatedVertexOrCreateDuplicate(meshData, otherSideIndices, v0.TriangleIndex, v2.TriangleIndex, t1);
 					triangle0 = new Triangle(v0.TriangleIndex, i01OtherSideP1, i02OtherSideP1);
 					triangle1 = new Triangle(i02SameSideP1, i01SameSideP1, v2.TriangleIndex);
 					triangle2 = new Triangle(i01SameSideP1, v1.TriangleIndex, v2.TriangleIndex);
@@ -367,18 +393,22 @@ namespace Popcorn.Slicer
 			else if (plane.Raycast(v2.Position, v0.Position, out t1) && plane.Raycast(v2.Position, v1.Position, out t2))
 			{
 				//        x v2
-				//   v02 / \ v12
+				//   v20 / \ v21
 				// -----*---*----- Plane
 				//     /     \
 				//    x-------x
 				//    v0      v1
-				int i02SameSideP2 = AddInterpolatedVertedToMeshDataAndGetIndex(meshData, v0, v2, t1);
-				int i02OtherSideP2 = AddInterpolatedVertedToMeshDataAndGetIndex(meshData, v0, v2, t1);
-				int i12SameSideP2 = AddInterpolatedVertedToMeshDataAndGetIndex(meshData, v1, v2, t2);
-				int i12OtherSideP2 = AddInterpolatedVertedToMeshDataAndGetIndex(meshData, v1, v2, t2);
-				triangle0 = new Triangle(i02SameSideP2, i12SameSideP2, v2.TriangleIndex);
-				triangle1 = new Triangle(v0.TriangleIndex, i12OtherSideP2, i02OtherSideP2);
-				triangle2 = new Triangle(v0.TriangleIndex, v1.TriangleIndex, i12OtherSideP2);
+				var sameSideIndices = v2.PlaneSide == Plane.Side.down ? downSideDuplicatedIndices : upSideDuplicatedIndices;
+				var otherSideIndices = v2.PlaneSide == Plane.Side.down ? upSideDuplicatedIndices : downSideDuplicatedIndices;
+
+				int i20SameSideP2 = GetCopyOfInterpolatedVertexOrCreateDuplicate(meshData, sameSideIndices, v2.TriangleIndex, v0.TriangleIndex, t1);
+				int i20OtherSideP2 = GetCopyOfInterpolatedVertexOrCreateDuplicate(meshData, otherSideIndices, v2.TriangleIndex, v0.TriangleIndex, t1);
+
+				int i21SameSideP2 = GetCopyOfInterpolatedVertexOrCreateDuplicate(meshData, sameSideIndices, v2.TriangleIndex, v1.TriangleIndex, t2);
+				int i21OtherSideP2 = GetCopyOfInterpolatedVertexOrCreateDuplicate(meshData, otherSideIndices, v2.TriangleIndex, v1.TriangleIndex, t2);
+				triangle0 = new Triangle(i20SameSideP2, i21SameSideP2, v2.TriangleIndex);
+				triangle1 = new Triangle(v0.TriangleIndex, i21OtherSideP2, i20OtherSideP2);
+				triangle2 = new Triangle(v0.TriangleIndex, v1.TriangleIndex, i21OtherSideP2);
 			}
 			meshData.AddTriangle(triangle0);
 			meshData.AddTriangle(triangle1);
@@ -395,21 +425,54 @@ namespace Popcorn.Slicer
 			return index;
 		}
 
-		private static int AddInterpolatedVertedToMeshDataAndGetIndex(
-			MeshData meshData, Vertex v0, Vertex v1, float t)
+		private struct IndicesPair
 		{
-			return AddCopyOfVertexToMeshDataAndGetIndex(meshData, Vertex.Lerp(v0, v1, t));
+			private int i0, i1;
+			public IndicesPair(int i0, int i1)
+			{
+				this.i0 = i0;
+				this.i1 = i1;
+			}
+
+			public int I0 { get => i0; }
+			public int I1 { get => i1; }
+
+            public override string ToString()
+            {
+                return $"({i0}, {i1})";
+            }
+        
 		}
 
 		private static int GetCopyOfVertexOrCreateDuplicate(MeshData meshData,
-			IDictionary<int, int> zoneDuplicateIndices, int index
+			IDictionary<IndicesPair, int> zoneDuplicateIndices, int index
 		)
 		{
 			int indexCopy;
-			if (!zoneDuplicateIndices.TryGetValue(index, out indexCopy))
+			IndicesPair pair = new IndicesPair(index, index);
+
+			if (!zoneDuplicateIndices.TryGetValue(pair, out indexCopy))
 			{
 				indexCopy = AddCopyOfVertexToMeshDataAndGetIndex(meshData, meshData.GetVertexAt(index));
-				zoneDuplicateIndices.Add(index, indexCopy);
+				zoneDuplicateIndices.Add(pair, indexCopy);
+			}
+			return indexCopy;
+		}
+
+		private static int GetCopyOfInterpolatedVertexOrCreateDuplicate(MeshData meshData,
+			IDictionary<IndicesPair, int> zoneDuplicateIndices, int index0, int index1, float t)
+		{
+			int indexCopy;
+			IndicesPair pair = new IndicesPair(index0, index1);
+			IndicesPair reversedPair = new IndicesPair(index1, index0);
+
+			if (!(zoneDuplicateIndices.TryGetValue(pair, out indexCopy) || zoneDuplicateIndices.TryGetValue(reversedPair, out indexCopy)))
+			{
+				Vertex v0 = meshData.GetVertexAt(index0);
+				Vertex v1 = meshData.GetVertexAt(index1);
+
+				indexCopy = AddCopyOfVertexToMeshDataAndGetIndex(meshData, Vertex.Lerp(v0, v1, t));
+				zoneDuplicateIndices.Add(pair, indexCopy);
 			}
 			return indexCopy;
 		}
