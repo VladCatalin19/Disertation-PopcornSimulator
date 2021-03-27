@@ -4,7 +4,7 @@ using UnityEngine;
 
 namespace Popcorn.Slicer
 {
-	public class MeshData
+	internal class MeshData
 	{
 		private IList<Vector3> vertices;
 		private IList<Vector3> normals;
@@ -138,6 +138,68 @@ namespace Popcorn.Slicer
 			}
 
 			return trianglesIndices;
+		}
+
+		public void RemoveUnusedVertices()
+		{
+			short[] verticesFrequencies = CalculateVerticesFrequencies();
+			short[] indicesSubstraction = CalculateIndicesSubstractions(verticesFrequencies);
+			RemoveVerticesWithZeroFrequency(verticesFrequencies);
+			FixIndicesAfterRemovingVertices(indicesSubstraction);
+		}
+
+		private short[] CalculateVerticesFrequencies()
+		{
+			short[] verticesFrequencies = new short[vertices.Count];
+			foreach (Triangle triangle in triangles)
+			{
+				++verticesFrequencies[triangle.I0];
+				++verticesFrequencies[triangle.I1];
+				++verticesFrequencies[triangle.I2];
+			}
+			return verticesFrequencies;
+		}
+
+		private short[] CalculateIndicesSubstractions(short[] verticesFrequencies)
+		{
+			short[] indicesSubstraction = new short[vertices.Count];
+			short currentSubstraction = 0;
+			for (int i = 0; i < verticesFrequencies.Length; ++i)
+			{
+				if (verticesFrequencies[i] == 0)
+				{
+					++currentSubstraction;
+				}
+				indicesSubstraction[i] = currentSubstraction;
+			}
+			return indicesSubstraction;
+		}
+
+		private void RemoveVerticesWithZeroFrequency(short[] verticesFrequencies)
+		{
+			for (int i = vertices.Count - 1; i >= 0; --i)
+			{
+				if (verticesFrequencies[i] == 0)
+				{
+					RemoveVertexAt(i);
+				}
+			}
+		}
+
+		private void FixIndicesAfterRemovingVertices(short[] indicesSubstraction)
+		{
+			for (int i = 0; i < triangles.Count; ++i)
+			{
+				int i0 = triangles[i].I0;
+				int i1 = triangles[i].I1;
+				int i2 = triangles[i].I2;
+
+				i0 -= indicesSubstraction[i0];
+				i1 -= indicesSubstraction[i1];
+				i2 -= indicesSubstraction[i2];
+
+				triangles[i] = new Triangle(i0, i1, i2);
+			}
 		}
 	}
 }
