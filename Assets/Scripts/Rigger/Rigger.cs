@@ -5,7 +5,8 @@ namespace Popcorn.Rigger
 {
 	public static class Rigger
 	{
-		public static void Rig(GameObject gameObject)
+
+		public static void Rig(GameObject gameObject, UnityEngine.Plane[] cuttingPlanes)
 		{
 			if (!gameObject) throw new System.ArgumentNullException("gameObject");
 
@@ -13,24 +14,25 @@ namespace Popcorn.Rigger
 			if (!meshFilter)
 				throw new System.ArgumentException("Provided GameObject does not have a MeshFilter component");
 
-			Graph<int> graph = InitGraph(meshFilter.mesh);
+			Mesh mesh = meshFilter.mesh;
+			Graph<int> graph = InitGraph(mesh);
+			ICollection<Zone> zones = GetGraphConnectedComponents(graph);
 
 			#if DEBUG
-			vertices = meshFilter.mesh.vertices;
-			transform = gameObject.transform;
-			Rigger.graph = graph;
-
-			verticesZones = new int[vertices.Length];
+			RiggerDebugger rg = gameObject.AddComponent<RiggerDebugger>();
+			rg.Init(meshFilter.mesh.vertices, zones, graph);
 			#endif
 
-			IList<IList<int>> zones = GetGraphConnectedComponents(graph);
 
+			//RigKernel(GetKernelRig(mesh, graph), gameObject, meshFilter);
+
+			/*
 			Debug.Log($"Zones: {zones.Count}");
-			foreach (IList<int> zone in zones)
+			foreach (Zone zone in zones)
 			{
-				Debug.Log($"Zone count: {zone.Count}");
-				
+				Debug.Log($"Zone count: {zone.indices.Count}");
 			}
+			*/
 		}
 
 		private static Graph<int> InitGraph(Mesh mesh)
@@ -59,53 +61,31 @@ namespace Popcorn.Rigger
 			return graph;
 		}
 
-		private static IList<IList<int>> GetGraphConnectedComponents(Graph<int> graph)
+		private static ICollection<Zone> GetGraphConnectedComponents(Graph<int> graph)
 		{
 			// No need to initialize the matrix with false values since C# does that
 			// automatically
 			bool[] visited = new bool[graph.VertexCount];
-			IList<IList<int>> zones = new List<IList<int>>(4);
+			ICollection<Zone> zones = new List<Zone>();
 
 			for (int i = 0; i < graph.VertexCount; ++i)
 			{
 				if (!visited[i])
 				{
-					zones.Add(BFS(graph, i, visited));
-
-					#if DEBUG
-					foreach (int index in zones[zoneCount])
-					{
-						verticesZones[index] = zoneCount;
-					}
-					zoneCount++;
-					#endif
+					Zone zone = BFS(graph, i, visited);
+					zones.Add(zone);
 				}
 			}
-
-			#if DEBUG
-			zoneColor = new Color[]
-			{
-				Color.red, Color.green, Color.blue, Color.magenta, Color.yellow, Color.cyan,
-				new Color(1, .576f, 0), new Color(.536f, 0, 1), Color.white, Color.white, Color.white, Color.white,
-				Color.white, Color.white, Color.white, Color.white, Color.white, Color.white,
-			};
-			
-			#endif
-
 			return zones;
 		}
 
 		// MAYBE DO: Optimise flood fill:
 		// https://www.codeproject.com/Articles/16405/Queue-Linear-Flood-Fill-A-Fast-Flood-Fill-Algorith
-		private static IList<int> BFS(Graph<int> graph, int start, bool[] visited)
+		private static Zone BFS(Graph<int> graph, int start, bool[] visited)
 		{
-			/*
-			string path = @"/home/vlad/Unity/Projects/Popcorn Test/Rigger.log";
-			System.IO.StreamWriter sw = new System.IO.StreamWriter(path);
-			sw.Write($"Starting BFS from: {start}");
-			*/
-			IList<int> zoneIndices = new List<int>(graph.VertexCount / 4);
-			Queue<int> q = new Queue<int>(graph.VertexCount / 4);
+			Zone zone = new Zone(new HashSet<int>());
+
+			Queue<int> q = new Queue<int>();
 			q.Enqueue(start);
 
 			while (q.Count > 0)
@@ -117,13 +97,7 @@ namespace Popcorn.Rigger
 				}
 
 				visited[index] = true;
-				zoneIndices.Add(index);
-				
-
-				/*
-				sw.Write($"Visited: {index}\n ");
-				sw.Flush();
-				*/
+				zone.Indices.Add(index);
 
 				foreach (int neighbor in graph.GetNeighbors(index))
 				{
@@ -133,34 +107,39 @@ namespace Popcorn.Rigger
 					}
 				}
 			}
-
-			//sw.Close();
-
-			return zoneIndices;
+			return zone;
 		}
 
-		#if DEBUG
-		private static Vector3[] vertices;
-		private static int[] verticesZones;
-		private static int zoneCount;
-		private static Color[] zoneColor;
-		private static Transform transform; 
-		private static Graph<int> graph;
-		public static void DrawGraph()
+		private struct RiggingResult
 		{
-			foreach(int vertex in graph.Vertices)
-			{
-				Color vertexColor = zoneColor[verticesZones[vertex]];
-				foreach(int neighbor in graph.GetNeighbors(vertex))
-				{
-					Color neighborColor = zoneColor[verticesZones[neighbor]];
-
-					Vector3 start = transform.TransformPoint(vertices[vertex]);
-					Vector3 end = transform.TransformPoint(vertices[neighbor]);
-					Debug.DrawLine(start, end, Color.Lerp(vertexColor, neighborColor, 0.5f));
-				}
-			}
+			public BoneWeight[] boneWeights;
+			public Transform[] bones;
+			public Matrix4x4[] bindPoses;
 		}
-		#endif
+
+		private static RiggingResult GetKernelRig(Mesh mesh, Graph<int> graph)
+		{
+			RiggingResult result = new RiggingResult();
+			/*
+			BoneWeight[] boneWeights = new BoneWeight[mesh.vertexCount];
+			Transform[] bones = new Transform[3];
+			Matrix4x4[] bindPoses = new Matrix4x4[bones.Length];
+			*/
+			return result;
+		}
+
+		private static void RigKernel(RiggingResult result, GameObject gameObject, MeshFilter meshFilter)
+		{
+			Mesh mesh = meshFilter.mesh;
+			mesh.boneWeights = result.boneWeights;
+			mesh.bindposes = result.bindPoses;
+
+			SkinnedMeshRenderer rend = gameObject.AddComponent<SkinnedMeshRenderer>();
+			rend.bones = result.bones;
+			rend.sharedMesh = mesh;
+
+			Object.Destroy(meshFilter);
+			Object.Destroy(gameObject.GetComponent<MeshRenderer>());
+		}
 	}
 }

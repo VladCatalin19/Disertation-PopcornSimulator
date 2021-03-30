@@ -4,10 +4,9 @@ public class PopcornGenerator : MonoBehaviour
 {
 	[SerializeField] private GameObject kernel = null;
 	[SerializeField] private Transform[] cuttingPlanes = null;
+	[SerializeField] private Transform[] riggingPlanes = null;
 
 	private System.Diagnostics.Stopwatch sw;
-
-	private bool drawGraphToggle = false;
 
 	private void Start()
 	{
@@ -16,17 +15,6 @@ public class PopcornGenerator : MonoBehaviour
 
 	private void Update()
 	{
-		#if DEBUG
-		if (Input.GetKeyDown(KeyCode.Space))
-		{
-			drawGraphToggle = !drawGraphToggle;
-		}
-		if (drawGraphToggle)
-		{
-			Popcorn.Rigger.Rigger.DrawGraph();
-		}
-		#endif
-
 		if (Input.GetButtonDown("Fire1"))
 		{
 			sw.Start();
@@ -39,17 +27,13 @@ public class PopcornGenerator : MonoBehaviour
 
 	private void MakePopcorn()
 	{
-		Plane[] planes = new Plane[cuttingPlanes.Length];
+		Plane[] cuttingPlanesSlicer = TransformsToPlanes(cuttingPlanes);
+		Popcorn.Slicer.Slicer.Slice(kernel, cuttingPlanesSlicer);
 
-		for (int i = 0; i < planes.Length; ++i)
-		{
-			planes[i] = TransformToPlane(cuttingPlanes[i]);
-			//Debug.Log($"plane: {planes[i].ToString("F5")}");
-		}
+		//ObjExporter.WriteMesh(kernel, @"/home/vlad/Unity/Projects/Popcorn Test/Kernel.obj");
 
-		Popcorn.Slicer.Slicer.Slice(kernel, planes);
-		ObjExporter.WriteMesh(kernel, @"/home/vlad/Unity/Projects/Popcorn Test/Kernel.obj");
-		Popcorn.Rigger.Rigger.Rig(kernel);
+		Plane[] riggingPlanesRigger = TransformsToPlanes(riggingPlanes);
+		Popcorn.Rigger.Rigger.Rig(kernel, riggingPlanesRigger);
 	}
 
 	private Plane TransformToPlane(Transform t)
@@ -57,5 +41,17 @@ public class PopcornGenerator : MonoBehaviour
 		Vector3 planeNormal = t.up;
 		Vector3 planeInPoint = t.position;
 		return new Plane(planeNormal, planeInPoint);
+	}
+
+	private Plane[] TransformsToPlanes(Transform[] t)
+	{
+		Plane[] planes = new Plane[t.Length];
+
+		for (int i = 0; i < planes.Length; ++i)
+		{
+			planes[i] =  TransformToPlane(t[i]);
+		}
+
+		return planes;
 	}
 }
