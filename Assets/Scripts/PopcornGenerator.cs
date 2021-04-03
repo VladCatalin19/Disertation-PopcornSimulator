@@ -5,6 +5,7 @@ public class PopcornGenerator : MonoBehaviour
 	[SerializeField] private GameObject kernel = null;
 	[SerializeField] private Transform[] cuttingPlanes = null;
 	[SerializeField] private Transform[] riggingPlanes = null;
+	[SerializeField] private Transform riggingRootBonePosition = null;
 
 	private System.Diagnostics.Stopwatch sw;
 
@@ -25,6 +26,18 @@ public class PopcornGenerator : MonoBehaviour
 		}
 	}
 
+	private void HidePlanes()
+	{
+		foreach (Transform t in cuttingPlanes)
+		{
+			t.gameObject.SetActive(false);
+		}
+		foreach (Transform t in riggingPlanes)
+		{
+			t.gameObject.SetActive(false);
+		}
+	}
+
 	private void MakePopcorn()
 	{
 		Plane[] cuttingPlanesSlicer = TransformsToPlanes(cuttingPlanes);
@@ -33,7 +46,9 @@ public class PopcornGenerator : MonoBehaviour
 		//ObjExporter.WriteMesh(kernel, @"/home/vlad/Unity/Projects/Popcorn Test/Kernel.obj");
 
 		Plane[] riggingPlanesRigger = TransformsToPlanes(riggingPlanes);
-		Popcorn.Rigger.Rigger.Rig(kernel, riggingPlanesRigger);
+		Popcorn.Rigger.Rigger.Rig(kernel, riggingPlanesRigger, riggingRootBonePosition);
+
+		HidePlanes();
 	}
 
 	private Plane TransformToPlane(Transform t)

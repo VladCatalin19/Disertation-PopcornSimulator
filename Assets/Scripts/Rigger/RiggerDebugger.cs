@@ -11,24 +11,27 @@ namespace Popcorn.Rigger
 		private static Color[] zoneColor = new Color[]
 		{
 			Color.red, Color.green, Color.blue, Color.magenta, Color.yellow, Color.cyan,
-			new Color(1, .576f, 0), new Color(.536f, 0, 1), Color.white, Color.white, Color.white, Color.white,
-			Color.white, Color.white, Color.white, Color.white, Color.white, Color.white,
+			new Color(1, .576f, 0), new Color(.536f, 0, 1), Color.white,
+			Color.red, Color.green, Color.blue, Color.magenta, Color.yellow, Color.cyan,
+			new Color(1, .576f, 0), new Color(.536f, 0, 1), Color.white, Color.black,
+			Color.red, Color.green, Color.blue, Color.magenta, Color.yellow, Color.cyan,
+			new Color(1, .576f, 0), new Color(.536f, 0, 1), Color.white,
 		};
 		private Graph<int> graph = null;
 
-		public void Init(Vector3[] vertices, ICollection<Zone> zones, Graph<int> graph)
+		public void Init(Vector3[] vertices, ICollection<Slice> zones, Graph<int> graph)
 		{
 			this.vertices = vertices;
 			this.graph = graph;
 			InitVerticesZones(zones);
 		}
 
-		private void InitVerticesZones(ICollection<Zone> zones)
+		private void InitVerticesZones(ICollection<Slice> zones)
 		{
 			verticesZones = new int[vertices.Length];
 
 			int zoneIndex = 0;
-			foreach (Zone zone in zones)
+			foreach (Slice zone in zones)
 			{
 				foreach (int vertexIndex in zone.Indices)
 				{
