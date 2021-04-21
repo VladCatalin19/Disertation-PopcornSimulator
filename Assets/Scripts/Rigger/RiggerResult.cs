@@ -2,7 +2,7 @@
 
 namespace Popcorn.Rigger
 {
-	public struct RiggerResult
+	internal struct RiggerResult
 	{
 		private BoneWeight[] boneWeights;
 		private Transform[] bones;

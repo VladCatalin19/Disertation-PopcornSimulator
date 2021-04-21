@@ -3,7 +3,7 @@ using UnityEngine;
 
 namespace Popcorn.Rigger
 {
-	public struct RiggedPartWithVertices
+	internal struct RiggedPartWithVertices
 	{
 		private readonly IList<Vector3> vertices;
 		private readonly IList<int> indices;

@@ -2,7 +2,7 @@
 
 namespace Popcorn.Rigger
 {
-	public class Graph<TVertex>
+	internal class Graph<TVertex>
 	{
 		IDictionary<TVertex, ICollection<TVertex>> graph;
 

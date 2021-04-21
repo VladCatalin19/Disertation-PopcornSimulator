@@ -3,7 +3,7 @@ using UnityEngine;
 
 namespace Popcorn.Rigger
 {
-	public class RiggerData
+	internal class RiggerData
 	{
 		private GameObject gameObject;
 		private Vector3[] vertices;

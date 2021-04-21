@@ -3,7 +3,7 @@ using UnityEngine;
 
 namespace Popcorn.Rigger
 {
-	public struct RiggedPart
+	internal struct RiggedPart
 	{
 		private ICollection<int> indices;
 

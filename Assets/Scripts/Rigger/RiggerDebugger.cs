@@ -19,7 +19,7 @@ namespace Popcorn.Rigger
 		};
 		private Graph<int> graph = null;
 
-		public void Init(Vector3[] vertices, ICollection<RiggedPart> riggedParts, Graph<int> graph)
+		internal void Init(Vector3[] vertices, ICollection<RiggedPart> riggedParts, Graph<int> graph)
 		{
 			this.vertices = vertices;
 			this.graph = graph;
