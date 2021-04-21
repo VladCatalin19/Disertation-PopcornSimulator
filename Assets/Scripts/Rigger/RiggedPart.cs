@@ -3,11 +3,11 @@ using UnityEngine;
 
 namespace Popcorn.Rigger
 {
-	public struct Slice
+	public struct RiggedPart
 	{
 		private ICollection<int> indices;
-		
-		public Slice(ICollection<int> indices)
+
+		public RiggedPart(ICollection<int> indices)
 		{
 			this.indices = indices;
 		}

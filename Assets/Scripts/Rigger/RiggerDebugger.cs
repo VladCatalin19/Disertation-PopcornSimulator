@@ -19,21 +19,21 @@ namespace Popcorn.Rigger
 		};
 		private Graph<int> graph = null;
 
-		public void Init(Vector3[] vertices, ICollection<Slice> zones, Graph<int> graph)
+		public void Init(Vector3[] vertices, ICollection<RiggedPart> riggedParts, Graph<int> graph)
 		{
 			this.vertices = vertices;
 			this.graph = graph;
-			InitVerticesZones(zones);
+			InitVerticesZones(riggedParts);
 		}
 
-		private void InitVerticesZones(ICollection<Slice> zones)
+		private void InitVerticesZones(ICollection<RiggedPart> riggedParts)
 		{
 			verticesZones = new int[vertices.Length];
 
 			int zoneIndex = 0;
-			foreach (Slice zone in zones)
+			foreach (RiggedPart riggedPart in riggedParts)
 			{
-				foreach (int vertexIndex in zone.Indices)
+				foreach (int vertexIndex in riggedPart.Indices)
 				{
 					verticesZones[vertexIndex] = zoneIndex;
 				}
