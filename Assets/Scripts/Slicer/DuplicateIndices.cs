@@ -3,7 +3,7 @@ using UnityEngine;
 
 namespace Popcorn.Slicer
 {
-	public struct IndicesPair
+	internal struct IndicesPair
 	{
 		private int i0, i1;
 		public IndicesPair(int i0, int i1)
@@ -22,7 +22,7 @@ namespace Popcorn.Slicer
 	
 	}
 
-	public struct SideIndices
+	internal struct SideIndices
 	{
 		private IDictionary<IndicesPair, int> sameSide;
 		private IDictionary<IndicesPair, int> otherSide;
@@ -39,7 +39,7 @@ namespace Popcorn.Slicer
 		public IDictionary<IndicesPair, int> OtherSide { get => otherSide; }
 	}
 
-	public class DuplicateIndices
+	internal class DuplicateIndices
 	{
 		private IDictionary<IndicesPair, int> upperHullIndices;
 		private IDictionary<IndicesPair, int> lowerHullIndices;

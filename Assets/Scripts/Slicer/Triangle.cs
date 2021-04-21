@@ -2,7 +2,7 @@
 
 namespace Popcorn.Slicer
 {
-	public struct Triangle
+	internal struct Triangle
 	{
 		private readonly int i0, i1, i2;
 

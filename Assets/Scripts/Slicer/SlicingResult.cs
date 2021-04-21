@@ -3,7 +3,7 @@ using UnityEngine;
 
 namespace Popcorn.Slicer
 {
-	public class SlicingResult
+	internal class SlicingResult
 	{
 		private IList<Triangle> triangles;
 		private bool hasNormals;

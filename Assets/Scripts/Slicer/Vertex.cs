@@ -2,7 +2,7 @@
 
 namespace Popcorn.Slicer
 {
-	public struct Vertex
+	internal struct Vertex
 	{
 		private readonly Vector3 position;
 		private Vector3? normal;

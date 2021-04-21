@@ -2,7 +2,7 @@
 
 namespace Popcorn.Slicer
 {
-	public struct Plane
+	internal struct Plane
 	{
 		public enum Side {up, down, on, none};
 
