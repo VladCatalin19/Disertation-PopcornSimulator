@@ -18,10 +18,15 @@ namespace Popcorn.Rigger
 		public static void Rig(GameObject gameObject, Plane[] riggingPlanes, Transform riggingRootBonePosition)
 		{
 			if (!gameObject) throw new System.ArgumentNullException("gameObject");
+			if (riggingPlanes == null) throw new System.ArgumentNullException("riggingPlanes");
+			if (!riggingRootBonePosition) throw new System.ArgumentNullException("riggingRootBonePosition");
 
 			MeshFilter meshFilter = gameObject.GetComponent<MeshFilter>();
 			if (!meshFilter)
 				throw new System.ArgumentException("Provided GameObject does not have a MeshFilter component");
+			
+			if (riggingPlanes.Length == 0)
+				throw new System.ArgumentException("Provided array of planes is empty");
 
 			RigSlicedMesh(gameObject, meshFilter, riggingPlanes, riggingRootBonePosition);
 		}
@@ -31,7 +36,7 @@ namespace Popcorn.Rigger
 		)
 		{
 			Mesh mesh = meshFilter.mesh;
-			RiggerData riggerData = new RiggerData(gameObject,  mesh.vertices, mesh.triangles);
+			RiggerData riggerData = new RiggerData(gameObject, mesh.vertices, mesh.triangles);
 
 			TransformRiggerDataVerticesToWorldSpace(riggerData);
 
@@ -47,6 +52,24 @@ namespace Popcorn.Rigger
 			AddGraphVisualizerComponent(graph, riggerData);
 			AddBoneVisualizerComponent(gameObject, riggingResult);
 			#endif
+		}
+
+		private static void TransformRiggerDataVerticesToWorldSpace(RiggerData riggerData)
+		{
+			Transform t = riggerData.GameObject.transform;
+			for (int i = 0; i < riggerData.Vertices.Length; ++i)
+			{
+				riggerData.Vertices[i] = t.TransformPoint(riggerData.Vertices[i]);
+			}
+		}
+
+		private static void TransformRiggerDataVerticesToLocalSpace(RiggerData riggerData)
+		{
+			Transform t = riggerData.GameObject.transform;
+			for (int i = 0; i < riggerData.Vertices.Length; ++i)
+			{
+				riggerData.Vertices[i] = t.InverseTransformPoint(riggerData.Vertices[i]);
+			}
 		}
 
 		private static MeshGraph CreateMeshGraph(RiggerData riggerData)
@@ -72,24 +95,6 @@ namespace Popcorn.Rigger
 			}
 
 			return graph;
-		}
-
-		private static void TransformRiggerDataVerticesToWorldSpace(RiggerData riggerData)
-		{
-			Transform t = riggerData.GameObject.transform;
-			for (int i = 0; i < riggerData.Vertices.Length; ++i)
-			{
-				riggerData.Vertices[i] = t.TransformPoint(riggerData.Vertices[i]);
-			}
-		}
-
-		private static void TransformRiggerDataVerticesToLocalSpace(RiggerData riggerData)
-		{
-			Transform t = riggerData.GameObject.transform;
-			for (int i = 0; i < riggerData.Vertices.Length; ++i)
-			{
-				riggerData.Vertices[i] = t.InverseTransformPoint(riggerData.Vertices[i]);
-			}
 		}
 
 		private static void SetRiggerDataSlices(RiggerData riggerData, MeshGraph graph)
@@ -208,17 +213,6 @@ namespace Popcorn.Rigger
 			return riggerResult;
 		}
 
-		private static int GetBoneCount(RiggerData riggerData)
-		{
-			// The first bone is the root bone
-			int bonesCount = 1;
-			foreach (ICollection<RiggedPart> riggedParts in riggerData.SlicesRiggedParts.Values)
-			{
-				// Each part will have 1 bone
-				bonesCount += riggedParts.Count;
-			}
-			return bonesCount;
-		}
 
 		private static Transform CreateBone(
 			string name, Transform parent, Vector3 localPosition, Quaternion rotation
@@ -237,6 +231,112 @@ namespace Popcorn.Rigger
 			Vector3 localPosition =	transform.InverseTransformPoint(riggingRootBonePosition.position);
 			Quaternion localRotation = Quaternion.LookRotation((transform.position - riggingRootBonePosition.position).normalized);
 			return CreateBone("RootBone", transform, localPosition, localRotation);
+		}
+
+		private static int GetBoneCount(RiggerData riggerData)
+		{
+			// The first bone is the root bone
+			int bonesCount = 1;
+			foreach (ICollection<RiggedPart> riggedParts in riggerData.SlicesRiggedParts.Values)
+			{
+				// Each part will have 1 bone
+				bonesCount += riggedParts.Count;
+			}
+			return bonesCount;
+		}
+
+		private struct PositionAndRotation
+		{
+			public Vector3 position;
+			public Vector3 normal;
+			public PositionAndRotation(Vector3 position, Vector3 normal)
+			{
+				this.position = position;
+				this.normal = normal;
+			}
+		}
+
+		private static void CreateBonesAndRigVertices(MeshGraph meshGraph, RiggerData riggerData, RiggerResult riggingResult)
+		{
+			int[] boneIndices = new int[riggerData.Vertices.Length];
+			Transform rootBone = riggingResult.Bones[0];
+			// Ignore root bone's index
+			int boneIndex = 1;
+			foreach (var keyEntry in riggerData.SlicesRiggedParts)
+			{
+				Slice slice = keyEntry.Key;
+				Transform prevBone = rootBone;
+				int rigZoneIndex = 0;
+				foreach (RiggedPart riggedPart in keyEntry.Value)
+				{
+					PositionAndRotation posnNorm = CalculateRiggedPartBonePosition(riggedPart, riggerData, rigZoneIndex == 0);
+					Vector3 position = posnNorm.position;
+					Vector3 normal = posnNorm.normal;
+					Vector3 localPosition = prevBone.InverseTransformPoint(position);
+					Quaternion localRotation = Quaternion.identity;//rigZoneIndex == 0 
+						//? Quaternion.FromToRotation(Vector3.forward, -normal)
+						//: Quaternion.identity;
+					riggingResult.Bones[boneIndex] = CreateBone($"Rig Zone {rigZoneIndex}", prevBone, localPosition, localRotation);
+					if (rigZoneIndex == 0)
+					{
+						//riggingResult.Bones[boneIndex].rotation = Quaternion.FromToRotation(Vector3.forward, (rootBone.position - position).normalized);
+						riggingResult.Bones[boneIndex].rotation = Quaternion.LookRotation((rootBone.position - position).normalized);
+						//riggingResult.Bones[boneIndex].localRotation = Quaternion.identity;
+					}
+					prevBone = riggingResult.Bones[boneIndex];
+					//riggedPart.Bone = riggingResult.Bones[boneIndex];
+
+					foreach (int index in riggedPart.Indices)
+					{
+						boneIndices[index] = boneIndex;
+						riggingResult.BoneWeights[index].boneIndex0 = boneIndex;
+						riggingResult.BoneWeights[index].weight0 = 1.0f; 
+					}
+
+					++boneIndex;
+					++rigZoneIndex;
+				}
+			}
+
+			/*
+			var neighborBones = new HashSet<int>();
+			for (int vertex = 0; vertex < riggerData.Vertices.Length; ++vertex)
+			{
+				neighborBones.Clear();
+				foreach (int neighbor in meshGraph.GetNeighbors(vertex))
+				{
+					neighborBones.Add(boneIndices[neighbor]);
+				}
+
+				float weight = 1.0f / neighborBones.Count;
+				int bone = 0;
+				foreach (int neighborBone in neighborBones)
+				{
+					SetBoneWeight(ref riggingResult.BoneWeights[vertex], bone++, neighborBone, weight);
+				}
+				//Debug.Log($"Bones: {bone}");
+			}
+			*/
+		}
+
+		private static PositionAndRotation CalculateRiggedPartBonePosition(RiggedPart riggedPart, RiggerData riggerData, bool isFirstPart)
+		{
+			RiggedPartWithVertices riggedPartVertices = GetRiggedPartWithVertices(riggedPart, riggerData);
+			Vector3 center = riggedPartVertices.GetCenterOfMass();
+			Vector3 meanNormal = CalculateSliceMeanNormal(riggedPartVertices, riggerData);
+			riggedPartVertices.TranslateVertices(-center);
+			riggedPartVertices.ProjectOnPlane(meanNormal);
+
+			Vector3 dir = Vector3.Angle(meanNormal, Vector3.forward) < Vector3.Angle(meanNormal, Vector3.back)
+				? Vector3.forward : Vector3.back;
+			riggedPartVertices.RotateVertices(Quaternion.FromToRotation(meanNormal, dir));
+
+			Bounds bounds = riggedPartVertices.GetBounds();
+			Vector3 reference = new Vector3(bounds.center.x, bounds.min.y, bounds.center.z);
+			reference.y = isFirstPart ? bounds.center.y : bounds.min.y ;
+
+			int index = GetIndexClosestToReference(riggedPartVertices, riggerData, reference);
+			return new PositionAndRotation(riggerData.Vertices[index], meanNormal);
 		}
 
 		private static RiggedPartWithVertices GetRiggedPartWithVertices(RiggedPart riggedPart, RiggerData riggerData)
@@ -271,11 +371,8 @@ namespace Popcorn.Rigger
 			return meanNormal.normalized;
 		}
 
-		private static int GetIndexClosestToRiggedPartCenter(RiggedPartWithVertices riggedPartVertices, RiggerData riggerData)
+		private static int GetIndexClosestToReference(RiggedPartWithVertices riggedPartVertices, RiggerData riggerData, Vector3 reference)
 		{
-			Bounds bounds = riggedPartVertices.GetBounds();
-			Vector3 reference = new Vector3(bounds.center.x, bounds.min.y, bounds.center.z);
-			
 			int index = 0;
 			float minDistance = float.MaxValue;
 
@@ -291,73 +388,19 @@ namespace Popcorn.Rigger
 			return riggedPartVertices.Indices[index];
 		}
 
-		private static Vector3 CalculateRiggedPartBonePosition(RiggedPart riggedPart, RiggerData riggerData)
+		private static void RigKernel(RiggerResult result, GameObject gameObject, MeshFilter meshFilter)
 		{
-			RiggedPartWithVertices riggedPartVertices = GetRiggedPartWithVertices(riggedPart, riggerData);
-			Vector3 center = riggedPartVertices.GetCenterOfMass();
-			Vector3 meanNormal = CalculateSliceMeanNormal(riggedPartVertices, riggerData);
-			riggedPartVertices.TranslateVertices(-center);
-			riggedPartVertices.ProjectOnPlane(meanNormal);
+			Mesh mesh = meshFilter.mesh;
+			mesh.boneWeights = result.BoneWeights;
+			mesh.bindposes = result.BindPoses;
 
-			Vector3 dir = Vector3.Angle(meanNormal, Vector3.forward) < Vector3.Angle(meanNormal, Vector3.back)
-				? Vector3.forward : Vector3.back;
-			riggedPartVertices.RotateVertices(Quaternion.FromToRotation(meanNormal, dir));
+			SkinnedMeshRenderer rend = gameObject.AddComponent<SkinnedMeshRenderer>();
+			rend.rootBone = result.Bones[0];
+			rend.bones = result.Bones;
+			rend.sharedMesh = mesh;
 
-			int index = GetIndexClosestToRiggedPartCenter(riggedPartVertices, riggerData);
-			return riggerData.Vertices[index];
-		}
-
-		private static void CreateBonesAndRigVertices(MeshGraph meshGraph, RiggerData riggerData, RiggerResult riggingResult)
-		{
-			int[] boneIndices = new int[riggerData.Vertices.Length];
-			Transform rootBone = riggingResult.Bones[0];
-			// Ignore root bone's index
-			int boneIndex = 1;
-			foreach (var keyEntry in riggerData.SlicesRiggedParts)
-			{
-				Slice slice = keyEntry.Key;
-				Transform prevBone = rootBone;
-				int sliceIndex = 0;
-				foreach (RiggedPart riggedPart in keyEntry.Value)
-				{
-					Vector3 position = CalculateRiggedPartBonePosition(riggedPart, riggerData);
-					Vector3 localPosition = prevBone.InverseTransformPoint(position);
-					Quaternion localRotation = Quaternion.identity;
-					riggingResult.Bones[boneIndex] = CreateBone($"Rig Zone {sliceIndex}", prevBone, localPosition, localRotation);
-					prevBone = riggingResult.Bones[boneIndex];
-					//riggedPart.Bone = riggingResult.Bones[boneIndex];
-
-					foreach (int index in riggedPart.Indices)
-					{
-						boneIndices[index] = boneIndex;
-						riggingResult.BoneWeights[index].boneIndex0 = boneIndex;
-						riggingResult.BoneWeights[index].weight0 = 1.0f; 
-					}
-
-					++boneIndex;
-					++sliceIndex;
-				}
-			}
-
-			/*
-			var neighborBones = new HashSet<int>();
-			for (int vertex = 0; vertex < riggerData.Vertices.Length; ++vertex)
-			{
-				neighborBones.Clear();
-				foreach (int neighbor in meshGraph.GetNeighbors(vertex))
-				{
-					neighborBones.Add(boneIndices[neighbor]);
-				}
-
-				float weight = 1.0f / neighborBones.Count;
-				int bone = 0;
-				foreach (int neighborBone in neighborBones)
-				{
-					SetBoneWeight(ref riggingResult.BoneWeights[vertex], bone++, neighborBone, weight);
-				}
-				//Debug.Log($"Bones: {bone}");
-			}
-			*/
+			Object.Destroy(meshFilter);
+			Object.Destroy(gameObject.GetComponent<MeshRenderer>());
 		}
 
 		private static void SetBoneWeight(ref BoneWeight boneWeight, int index, int boneIndex, float weight)
@@ -395,19 +438,6 @@ namespace Popcorn.Rigger
 			}
 		}
 
-		private static void RigKernel(RiggerResult result, GameObject gameObject, MeshFilter meshFilter)
-		{
-			Mesh mesh = meshFilter.mesh;
-			mesh.boneWeights = result.BoneWeights;
-			mesh.bindposes = result.BindPoses;
-
-			SkinnedMeshRenderer rend = gameObject.AddComponent<SkinnedMeshRenderer>();
-			rend.bones = result.Bones;
-			rend.sharedMesh = mesh;
-
-			Object.Destroy(meshFilter);
-			Object.Destroy(gameObject.GetComponent<MeshRenderer>());
-		}
 
 		/*
 		private static void SetBoneWeights(MeshGraph meshGraph, ICollection<Slice> slices, RiggerResult riggingResult)

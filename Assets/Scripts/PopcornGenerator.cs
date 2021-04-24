@@ -6,17 +6,20 @@ public class PopcornGenerator : MonoBehaviour
 	[SerializeField] private Transform[] cuttingPlanes = null;
 	[SerializeField] private Transform[] riggingPlanes = null;
 	[SerializeField] private Transform riggingRootBonePosition = null;
+	[SerializeField] private AnimationCurve test = null;
 
 	private System.Diagnostics.Stopwatch sw;
+	private bool didPopcorn = false;
 
 	private void Start()
 	{
 		sw = new System.Diagnostics.Stopwatch();
+		//PrintAnimationCurveKeys();
 	}
 
 	private void Update()
 	{
-		if (Input.GetButtonDown("Fire1"))
+		if (Input.GetButtonDown("Fire1") && !didPopcorn)
 		{
 			sw.Start();
 			MakePopcorn();
@@ -48,6 +51,10 @@ public class PopcornGenerator : MonoBehaviour
 		Plane[] riggingPlanesRigger = TransformsToPlanes(riggingPlanes);
 		Popcorn.Rigger.Rigger.Rig(kernel, riggingPlanesRigger, riggingRootBonePosition);
 
+		Popcorn.Animator.Animator.Animate(kernel);
+
+		didPopcorn = true;
+
 		HidePlanes();
 	}
 
@@ -68,5 +75,25 @@ public class PopcornGenerator : MonoBehaviour
 		}
 
 		return planes;
+	}
+
+	private void PrintAnimationCurveKeys()
+	{
+		foreach (Keyframe keyFrame in test.keys)
+		{
+			Debug.Log(
+				// float time, float value, float inTangent, float outTangent, float inWeight, float outWeight
+				$"new Keyframe(time:{keyFrame.time}f, value:{keyFrame.value}f, inTangent:{keyFrame.inTangent}f, " +
+				$"outTangent:{keyFrame.outTangent}f, inWeight:{keyFrame.inWeight}f, outWeight:{keyFrame.outWeight}f);"
+				/*
+				$"Time: {keyFrame.time}\n" +
+				$"Value: {keyFrame.value}\n" +
+				$"InTangent: {keyFrame.inTangent}\n" +
+				$"OutTangent: {keyFrame.outTangent}\n" +
+				$"InWeight: {keyFrame.inWeight}\n" +
+				$"OutWeight: {keyFrame.outWeight}"
+				*/
+			);
+		}
 	}
 }
