@@ -1,6 +1,6 @@
 ﻿using UnityEngine;
 
-namespace Popcorn.Rigger
+namespace PopcornGenerator.Rigger
 {
 	internal struct RiggerResult
 	{

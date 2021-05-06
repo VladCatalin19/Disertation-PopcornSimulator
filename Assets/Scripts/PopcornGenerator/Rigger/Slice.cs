@@ -1,13 +1,13 @@
 ﻿using System.Collections.Generic;
 using UnityEngine;
 
-namespace Popcorn.Rigger
+namespace PopcornGenerator.Rigger
 {
-	internal struct RiggedPart
+	internal struct Slice
 	{
 		private ICollection<int> indices;
-
-		public RiggedPart(ICollection<int> indices)
+		
+		public Slice(ICollection<int> indices)
 		{
 			this.indices = indices;
 		}

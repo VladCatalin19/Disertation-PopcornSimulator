@@ -1,7 +1,7 @@
 ﻿using System.Collections.Generic;
 using UnityEngine;
 
-namespace Popcorn.Animator
+namespace PopcornGenerator.Animator
 {
 	public static class Animator
 	{

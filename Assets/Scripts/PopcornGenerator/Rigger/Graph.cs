@@ -1,6 +1,6 @@
 ﻿using System.Collections.Generic;
 
-namespace Popcorn.Rigger
+namespace PopcornGenerator.Rigger
 {
 	internal class Graph<TVertex>
 	{

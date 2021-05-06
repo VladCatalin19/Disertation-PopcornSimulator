@@ -2,7 +2,7 @@
 using System.Linq;
 using UnityEngine;
 
-namespace Popcorn.Slicer
+namespace PopcornGenerator.Slicer
 {
 	internal class MeshData
 	{

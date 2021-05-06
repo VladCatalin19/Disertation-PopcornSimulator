@@ -1,6 +1,6 @@
 ﻿using UnityEngine;
 
-namespace Popcorn.Slicer
+namespace PopcornGenerator.Slicer
 {
 	internal static class Constants
 	{

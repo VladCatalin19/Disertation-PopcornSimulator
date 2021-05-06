@@ -2,16 +2,20 @@
 using BoneTool.Script.Runtime;
 using UnityEngine;
 
-using MeshGraph = Popcorn.Rigger.Graph<int>;
-using SliceCollection = System.Collections.Generic.List<Popcorn.Rigger.Slice>;
+using MeshGraph = PopcornGenerator.Rigger.Graph<int>;
+using SliceCollection = System.Collections.Generic.List<PopcornGenerator.Rigger.Slice>;
 using SliceIndices = System.Collections.Generic.HashSet<int>;
-using RiggedPartCollection = System.Collections.Generic.List<Popcorn.Rigger.RiggedPart>;
+using RiggedPartCollection = System.Collections.Generic.List<PopcornGenerator.Rigger.RiggedPart>;
 using RiggedPartIdices = System.Collections.Generic.HashSet<int>;
 using SlicesRiggedPartsDictionary = System.Collections.Generic.Dictionary
-	<Popcorn.Rigger.Slice, System.Collections.Generic.IList<Popcorn.Rigger.RiggedPart>>;
+	<PopcornGenerator.Rigger.Slice, System.Collections.Generic.IList<PopcornGenerator.Rigger.RiggedPart>>;
+
+using Frontier = System.Collections.Generic.List<int>;
+using SlicesFrontiersDictionary = System.Collections.Generic.Dictionary
+	<PopcornGenerator.Rigger.Slice, System.Collections.Generic.IList<int>>;
 
 
-namespace Popcorn.Rigger
+namespace PopcornGenerator.Rigger
 {
 	public static class Rigger
 	{
@@ -36,7 +40,7 @@ namespace Popcorn.Rigger
 		)
 		{
 			Mesh mesh = meshFilter.mesh;
-			RiggerData riggerData = new RiggerData(gameObject, mesh.vertices, mesh.triangles);
+			RiggerData riggerData = new RiggerData(gameObject, mesh.vertices, mesh.uv, mesh.triangles);
 
 			TransformRiggerDataVerticesToWorldSpace(riggerData);
 
@@ -46,6 +50,15 @@ namespace Popcorn.Rigger
 
 			RiggerResult riggingResult = CreateKernelRig(graph, riggerData, riggingRootBonePosition);
 			RigKernel(riggingResult, gameObject, meshFilter);
+
+
+			riggerData.SlicesFrontiers = new SlicesFrontiersDictionary();
+			foreach (Slice slice in riggerData.Slices)
+			{
+				Frontier frontier = GetSliceFrontier(riggerData, slice, graph);
+				riggerData.SlicesFrontiers[slice] = frontier;
+				break;
+			}
 
 			#if DEBUG
 			TransformRiggerDataVerticesToLocalSpace(riggerData);
@@ -471,6 +484,107 @@ namespace Popcorn.Rigger
 			}
 		}
 		*/
+
+		private enum Orientation { Colinear, Clockwise, CounterClockwise }
+
+		private const float Epsilon = 1.0e-4f;
+		private static Orientation GetPointsOrientation(Vector2 p, Vector2 q, Vector2 r)
+		{
+			float val = (q.y - p.y) * (r.x - q.x) - (q.x - p.x) * (r.y - q.y);
+
+			if (Mathf.Abs(val) < Epsilon)
+			{
+				return Orientation.Colinear;
+			}
+			return val > 0.0f ? Orientation.Clockwise : Orientation.CounterClockwise;
+		}
+
+		private static bool OnSegement(Vector2 p, Vector2 q, Vector2 r)
+		{
+			return (q.x <= Mathf.Max(p.x, r.x) && q.x >= Mathf.Min(p.x, r.x) &&
+				q.y <= Mathf.Max(p.y, r.y) && q.y >= Mathf.Min(p.y, r.y));
+		}
+
+		// TODO make a more generic method which does not use uv coordinates
+		// Matbe a mesh parametrization?
+		// https://www.geeksforgeeks.org/convex-hull-set-1-jarviss-algorithm-or-wrapping/
+		private static Frontier GetSliceFrontier(RiggerData riggerData, Slice slice, MeshGraph graph)
+		{
+			Frontier frontier = new Frontier();
+			List<int> sliceIndices = new List<int>(slice.Indices);
+
+			int maxSteps = riggerData.Vertices.Length;
+
+			if (riggerData.Vertices.Length < 3)
+			{
+				return frontier;
+			}
+
+			int leftMostPointSliceIndex = 0;
+			for (int i = 0; i < sliceIndices.Count; ++i)
+			{
+				Vector2 point = riggerData.UV[sliceIndices[i]];
+				Vector2 leftMostPoint = riggerData.UV[leftMostPointSliceIndex];
+				//if (riggerData.UV[sliceIndices[i]].x < riggerData.UV[sliceIndices[leftMostPointSliceIndex]].x)
+				if (point.x < leftMostPoint.x || Mathf.Abs(point.x - leftMostPoint.x) < Epsilon && point.y < leftMostPoint.y)
+				{
+					//leftMostPointSliceIndex = i;
+					leftMostPointSliceIndex = sliceIndices[i];
+				}
+			}
+
+			int previousSliceIndex = leftMostPointSliceIndex, currentSliceIndex = -1;
+			do
+			{
+				//frontier.Add(sliceIndices[firstSliceIndex]);
+				frontier.Add(previousSliceIndex);
+
+				ICollection<int> neighbors = graph.GetNeighbors(previousSliceIndex);
+				IEnumerator<int> neighborsEnum = neighbors.GetEnumerator();
+				neighborsEnum.MoveNext();
+				currentSliceIndex = neighborsEnum.Current;//(firstSliceIndex + 1) % sliceIndices.Count;
+
+				//Vector2 firstPoint = riggerData.UV[sliceIndices[firstSliceIndex]];
+				//Vector2 secondPoint = riggerData.UV[sliceIndices[secondSliceIndex]];
+				Vector2 previousPoint = riggerData.UV[previousSliceIndex];
+				Vector2 currentPoint = riggerData.UV[currentSliceIndex];
+				//for (int i = 0; i < sliceIndices.Count; ++i)
+				foreach (int i in neighbors)
+				{
+					//if (GetPointsOrientation(firstPoint, riggerData.UV[sliceIndices[i]], secondPoint) == Orientation.CounterClockwise)
+					if (GetPointsOrientation(previousPoint, riggerData.UV[i], currentPoint) == Orientation.CounterClockwise
+						|| previousSliceIndex != i && GetPointsOrientation(previousPoint, riggerData.UV[i], currentPoint) == Orientation.Colinear
+							&& OnSegement(previousPoint, currentPoint, riggerData.UV[i]))
+					{
+						currentSliceIndex = i;
+					}
+				}
+
+				previousSliceIndex = currentSliceIndex;
+			}
+			while (previousSliceIndex != leftMostPointSliceIndex && --maxSteps > 0);
+
+			GameObject root = new GameObject();
+			root.transform.position = Vector3.zero;
+			root.transform.localScale = Vector3.one;
+			root.transform.SetParent(riggerData.GameObject.transform, true);
+			Debug.Log($"Left most index: {leftMostPointSliceIndex}");
+			System.Text.StringBuilder strb = new System.Text.StringBuilder();
+			for (int i = 0; i < frontier.Count; ++i)
+			{
+				strb.Append(frontier[i]).Append(' ');
+				GameObject obj = GameObject.CreatePrimitive(PrimitiveType.Sphere);
+				obj.transform.name = $"Frontier index {i}";
+				obj.transform.parent = root.transform;
+				obj.transform.position = riggerData.Vertices[frontier[i]];
+				obj.transform.localScale = new Vector3(0.008f, 0.008f, 0.008f);
+				//obj.GetComponent<Renderer>().material.color = Random.ColorHSV();
+			}
+			Debug.Log($"Indices: {strb.ToString()}");
+
+
+			return frontier;
+		}
 
 		#if DEBUG
 		private static void AddGraphVisualizerComponent(MeshGraph graph, RiggerData riggerData)

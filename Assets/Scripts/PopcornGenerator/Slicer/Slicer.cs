@@ -1,7 +1,7 @@
 ﻿using System.Collections.Generic;
 using UnityEngine;
 
-namespace Popcorn.Slicer
+namespace PopcornGenerator.Slicer
 {
 	public static class Slicer
 	{

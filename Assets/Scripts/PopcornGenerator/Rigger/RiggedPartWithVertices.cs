@@ -1,7 +1,7 @@
 ﻿using System.Collections.Generic;
 using UnityEngine;
 
-namespace Popcorn.Rigger
+namespace PopcornGenerator.Rigger
 {
 	internal struct RiggedPartWithVertices
 	{
