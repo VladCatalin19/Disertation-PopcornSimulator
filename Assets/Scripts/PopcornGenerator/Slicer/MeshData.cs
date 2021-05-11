@@ -11,6 +11,7 @@ namespace PopcornGenerator.Slicer
 		private IList<Vector2> uvs;
 		private IList<Vector4> tangents;
 		private IList<Triangle> triangles;
+		private IList<Slice> slices;
 
 		public MeshData(Vector3[] vertices, Vector3[] normals, Vector2[] uvs,
 			Vector4[] tangents, int[] triangles)
@@ -26,6 +27,8 @@ namespace PopcornGenerator.Slicer
 				Triangle t = new Triangle(triangles[i], triangles[i + 1], triangles[i + 2]);
 				this.triangles.Add(t);
 			}
+
+			slices = new List<Slice>();
 		}
 
 		public MeshData(Mesh mesh)
@@ -36,6 +39,7 @@ namespace PopcornGenerator.Slicer
 		public IList<Vector2> UVs { get => uvs; }
 		public IList<Vector4> Tangents { get => tangents; }
 		public IList<Triangle> Triangles { get => triangles; }
+		public IList<Slice> Slices { get => slices; }
 
 		public void AddVertex(Vector3 vertex)
 		{
@@ -145,7 +149,8 @@ namespace PopcornGenerator.Slicer
 			short[] verticesFrequencies = CalculateVerticesFrequencies();
 			short[] indicesSubstraction = CalculateIndicesSubstractions(verticesFrequencies);
 			RemoveVerticesWithZeroFrequency(verticesFrequencies);
-			FixIndicesAfterRemovingVertices(indicesSubstraction);
+			FixTrianglesAfterRemovingVertices(indicesSubstraction);
+			FixSlicesAfterRemovingVertices(indicesSubstraction, verticesFrequencies);
 		}
 
 		private short[] CalculateVerticesFrequencies()
@@ -186,7 +191,7 @@ namespace PopcornGenerator.Slicer
 			}
 		}
 
-		private void FixIndicesAfterRemovingVertices(short[] indicesSubstraction)
+		private void FixTrianglesAfterRemovingVertices(short[] indicesSubstraction)
 		{
 			for (int i = 0; i < triangles.Count; ++i)
 			{
@@ -199,6 +204,41 @@ namespace PopcornGenerator.Slicer
 				i2 -= indicesSubstraction[i2];
 
 				triangles[i] = new Triangle(i0, i1, i2);
+			}
+		}
+
+		private void FixSlicesAfterRemovingVertices(short[] indicesSubstraction, short[] verticesFrequencies)
+		{
+			foreach (Slice slice in slices)
+			{
+				// WTH why should the indices be removed from here as well? There should not be any
+				// duplicates here!
+
+				for (int i = slice.AllIndices.Count - 1; i >= 0; --i)
+				{
+					if (verticesFrequencies[slice.AllIndices[i]] == 0)
+					{
+						slice.AllIndices.RemoveAt(i);
+					}
+				}
+				for (int i = slice.BorderIndices.Count - 1; i >= 0; --i)
+				{
+					if (verticesFrequencies[slice.BorderIndices[i]] == 0)
+					{
+						slice.BorderIndices.RemoveAt(i);
+					}
+				}
+
+
+
+				for (int index = 0; index < slice.AllIndices.Count; ++index)
+				{
+					slice.AllIndices[index] -= indicesSubstraction[slice.AllIndices[index]];
+				}
+				for (int index = 0; index < slice.BorderIndices.Count; ++index)
+				{
+					slice.BorderIndices[index] -= indicesSubstraction[slice.BorderIndices[index]];
+				}
 			}
 		}
 	}

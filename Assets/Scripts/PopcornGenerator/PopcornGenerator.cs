@@ -1,4 +1,5 @@
-﻿using UnityEngine;
+﻿using System.Collections.Generic;
+using UnityEngine;
 
 namespace PopcornGenerator
 {
@@ -53,14 +54,14 @@ namespace PopcornGenerator
 		private void MakePopcorn()
 		{
 			Plane[] cuttingPlanesSlicer = TransformsToPlanes(cuttingPlanes);
-			Slicer.Slicer.Slice(kernel, cuttingPlanesSlicer);
+			IList<Slicer.Slice> slices = Slicer.Slicer.Slice(kernel, cuttingPlanesSlicer);
 
 			//ObjExporter.WriteMesh(kernel, @"/home/vlad/Unity/Projects/Popcorn Test/Kernel.obj");
 
 			Plane[] riggingPlanesRigger = TransformsToPlanes(riggingPlanes);
-			Rigger.Rigger.Rig(kernel, riggingPlanesRigger, riggingRootBonePosition);
+			Rigger.Rigger.Rig(kernel, slices, riggingPlanesRigger, riggingRootBonePosition);
 
-			//Popcorn.Animator.Animator.Animate(kernel);
+			Animator.Animator.Animate(kernel);
 
 			didPopcorn = true;
 

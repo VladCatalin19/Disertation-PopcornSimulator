@@ -44,10 +44,13 @@ namespace PopcornGenerator.Slicer
 		private IDictionary<IndicesPair, int> upperHullIndices;
 		private IDictionary<IndicesPair, int> lowerHullIndices;
 
-		public DuplicateIndices()
+		public DuplicateIndices(
+			IDictionary<IndicesPair, int> upperHullIndices,
+			IDictionary<IndicesPair, int> lowerHullIndices
+		)
 		{
-			upperHullIndices = new Dictionary<IndicesPair, int>();
-			lowerHullIndices = new Dictionary<IndicesPair, int>();
+			this.upperHullIndices = upperHullIndices;
+			this.lowerHullIndices = lowerHullIndices;
 		}
 
 		public SideIndices GetHullIndices(Plane.Side planeSide)
@@ -64,5 +67,8 @@ namespace PopcornGenerator.Slicer
 			upperHullIndices.Clear();
 			lowerHullIndices.Clear();
 		}
+
+		public ICollection<int> UpperHullIndices { get => upperHullIndices.Values; }
+		public ICollection<int> LowerHullIndices { get => lowerHullIndices.Values; }
 	}
 }

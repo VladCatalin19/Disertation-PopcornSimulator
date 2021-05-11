@@ -5,13 +5,16 @@ namespace PopcornGenerator.Rigger
 {
 	internal struct RiggedPart
 	{
-		private ICollection<int> indices;
+		private ICollection<int> allIndices;
+		private ICollection<int> borderIndices;
 
-		public RiggedPart(ICollection<int> indices)
+		public RiggedPart(ICollection<int> allIndices, ICollection<int> borderIndices)
 		{
-			this.indices = indices;
+			this.allIndices = allIndices;
+			this.borderIndices = borderIndices;
 		}
 
-		public ICollection<int> Indices { get => indices; }
+		public ICollection<int> AllIndices { get => allIndices; }
+		public ICollection<int> BorderIndices { get => borderIndices; }
 	}
 }

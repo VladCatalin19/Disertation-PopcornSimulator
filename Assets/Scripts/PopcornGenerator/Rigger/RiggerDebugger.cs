@@ -33,7 +33,7 @@ namespace PopcornGenerator.Rigger
 			int zoneIndex = 0;
 			foreach (RiggedPart riggedPart in riggedParts)
 			{
-				foreach (int vertexIndex in riggedPart.Indices)
+				foreach (int vertexIndex in riggedPart.AllIndices)
 				{
 					verticesZones[vertexIndex] = zoneIndex;
 				}

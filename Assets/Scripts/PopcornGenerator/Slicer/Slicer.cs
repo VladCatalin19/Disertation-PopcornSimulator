@@ -1,11 +1,15 @@
 ﻿using System.Collections.Generic;
 using UnityEngine;
 
+using DuplicatedIndicesCollection = System.Collections.Generic.Dictionary<PopcornGenerator.Slicer.IndicesPair, int>;
+using SliceAllIndicesCollection = System.Collections.Generic.List<int>;
+using SliceBorderIndicesCollection = System.Collections.Generic.List<int>;
+
 namespace PopcornGenerator.Slicer
 {
 	public static class Slicer
 	{
-		public static void Slice(GameObject gameObject, UnityEngine.Plane[] cuttingPlanes)
+		public static IList<Slice> Slice(GameObject gameObject, UnityEngine.Plane[] cuttingPlanes)
 		{
 			if (!gameObject) throw new System.ArgumentNullException("gameObject");
 			if (cuttingPlanes == null) throw new System.ArgumentNullException("cuttingPlanes");
@@ -14,18 +18,61 @@ namespace PopcornGenerator.Slicer
 			if (!meshFilter)
 				throw new System.ArgumentException("Provided GameObject does not have a MeshFilter component");
 
-			SliceMesh(meshFilter.mesh, cuttingPlanes, gameObject.transform);
+			return SliceMesh(meshFilter.mesh, cuttingPlanes, gameObject.transform);
 		}
 
-		private static void SliceMesh(Mesh mesh, UnityEngine.Plane[] cuttingPlanes, Transform spaceTransform)
+		private static IList<Slice> SliceMesh(Mesh mesh, UnityEngine.Plane[] cuttingPlanes, Transform spaceTransform)
 		{
 			MeshData meshData = new MeshData(mesh);
+			Plane[] planes = UnityPlanesToSlicerPlanes(cuttingPlanes);
 
 			TransformMeshDataVerticesToWorldSpace(meshData, spaceTransform);
-			SliceMeshTriangles(meshData, cuttingPlanes);
+			DuplicateIndices[] duplicateIndices = SliceMeshTriangles(meshData, planes);
+			GetSlicesAndAddThemToMeshData(meshData, planes, duplicateIndices);
 			meshData.RemoveUnusedVertices();
+
+			/*
+			GameObject[] sidesObjects = new GameObject[meshData.Slices.Count];
+			for (int i = 0; i < sidesObjects.Length; ++i)
+			{
+				sidesObjects[i] = new GameObject($"Side {i}");
+			}
+
+			Color[] sideColors = new Color[] { Color.red, Color.green, Color.blue, Color.magenta, Color.cyan };
+			Color[] borderColors = new Color[] { Color.white, Color.black, Color.yellow, new Color(1.0f, 165.0f / 255.0f, 0.0f) };
+			int sliceIndex = 0;
+			foreach (Slice slice in meshData.Slices)
+			{
+				foreach (int vertexIndex in slice.AllIndices)
+				{
+					GameObject obj = GameObject.CreatePrimitive(PrimitiveType.Sphere);
+					obj.transform.name = $"Vertex {vertexIndex} Side {sliceIndex}";
+					obj.transform.parent = sidesObjects[sliceIndex].transform;
+					obj.transform.position = meshData.Vertices[vertexIndex];
+					obj.transform.localScale = new Vector3(0.008f, 0.008f, 0.008f);
+					obj.GetComponent<Renderer>().material.color = sideColors[sliceIndex];
+				}
+
+				foreach (int vertexIndex in slice.BorderIndices)
+				{
+					GameObject obj = GameObject.CreatePrimitive(PrimitiveType.Sphere);
+					obj.transform.name = $"Vertex {vertexIndex} Side {sliceIndex}";
+					obj.transform.parent = sidesObjects[sliceIndex].transform;
+					obj.transform.position = meshData.Vertices[vertexIndex];
+					obj.transform.localScale = new Vector3(0.009f, 0.009f, 0.009f);
+					obj.GetComponent<Renderer>().material.color = borderColors[sliceIndex];
+				}
+				++sliceIndex;
+			}
+			*/
+
+			// TODO Remove this and fix slicer
+			RemoveTrianglesWithIndicesInDifferentSlices(meshData);
+
 			TransformMeshDataVerticesToLocalSpace(meshData, spaceTransform);
 			meshData.ToMesh(mesh);
+
+			return meshData.Slices;
 		}
 
 		private static void TransformMeshDataVerticesToWorldSpace(MeshData meshData, Transform transform)
@@ -44,29 +91,71 @@ namespace PopcornGenerator.Slicer
 			}
 		}
 
-		private static void SliceMeshTriangles(MeshData meshData, UnityEngine.Plane[] cuttingPlanes)
+		private static DuplicateIndices[] SliceMeshTriangles(MeshData meshData, Plane[] planes)
 		{
-			DuplicateIndices duplicateIndices = new DuplicateIndices();
+			DuplicateIndices[] duplicateIndices = new DuplicateIndices[planes.Length];
 
-			foreach (UnityEngine.Plane planeUnity in cuttingPlanes)
+			for (int planeIndex = 0; planeIndex < planes.Length; ++planeIndex)
 			{
-				Plane plane = new Plane(planeUnity);
+				//Debug.Log($"Plane {planeIndex}");
+
 				int maxTriangleIndex = meshData.Triangles.Count;
+				duplicateIndices[planeIndex] = new DuplicateIndices(new DuplicatedIndicesCollection(), new DuplicatedIndicesCollection());
 
-				duplicateIndices.Clear();
-
-				for (int i = 0; i < maxTriangleIndex; ++i)
+				for (int triangleIndex = 0; triangleIndex < maxTriangleIndex; ++triangleIndex)
 				{
 					bool shouldDeleteTriangle = SliceTriangleAndAddToMeshData(
-						meshData, i, plane, duplicateIndices
+						meshData, triangleIndex, planes[planeIndex], duplicateIndices[planeIndex]
 					);
 					if (shouldDeleteTriangle)
 					{
-						meshData.RemoveTriangleAt(i);
+						meshData.RemoveTriangleAt(triangleIndex);
 						--maxTriangleIndex;
-						--i;
+						--triangleIndex;
 					}
 				}
+			}
+
+			return duplicateIndices;
+		}
+
+		private static Plane[] UnityPlanesToSlicerPlanes(UnityEngine.Plane[] unityPlanes)
+		{
+			Plane[] planes = new Plane[unityPlanes.Length];
+
+			for (int planeIndex = 0; planeIndex < unityPlanes.Length; ++planeIndex)
+			{
+				planes[planeIndex] = new Plane(unityPlanes[planeIndex]);
+			}
+
+			return planes;
+		}
+
+		private static bool IsOneOfThemTriangles(Triangle t)
+		{
+			return (t.I0 == 4050 && t.I1 == 4215 && t.I2 == 3691)
+				|| (t.I0 == 2558 && t.I1 == 4217 && t.I2 == 3687)
+				|| (t.I0 == 2558 && t.I1 == 4053 && t.I2 == 4217)
+				|| (t.I0 == 3724 && t.I1 == 4221 && t.I2 == 4219)
+				|| (t.I0 == 4222 && t.I1 == 3729 && t.I2 == 4224);
+		}
+
+		private static void DisplayProblemTriangle(Triangle t, MeshData meshData, string function)
+		{
+			Debug.LogWarning($"Found triangle {t} in {function}");
+
+			GameObject triangle = new GameObject("Triangle");
+			triangle.transform.position = (meshData.Vertices[t.I0] + meshData.Vertices[t.I1] + meshData.Vertices[t.I2]) / 3;
+			Color c = Random.ColorHSV();
+
+			for (int i = 0; i < 3; ++i)
+			{
+				GameObject obj = GameObject.CreatePrimitive(PrimitiveType.Sphere);
+				obj.transform.name = $"Vertex {t[i]}";
+				obj.transform.parent = triangle.transform;
+				obj.transform.position = meshData.Vertices[t[i]];
+				obj.transform.localScale = new Vector3(0.001f, 0.001f, 0.001f);
+				obj.GetComponent<Renderer>().material.color = c;
 			}
 		}
 
@@ -144,8 +233,9 @@ namespace PopcornGenerator.Slicer
 			MeshData meshData, Vertex v0, Vertex v1, Vertex v2, DuplicateIndices duplicateIndices
 		)
 		{
-			Triangle newTriangle = new Triangle();
-			if (v0.PlaneSide  == Plane.Side.on)
+			//Debug.Log($"Slicing triangle {v0.TriangleIndex}, {v1.TriangleIndex}, {v2.TriangleIndex} in DuplicateVertexOnPlaneAndAddTriangleToMeshData");
+			Triangle triangle0 = new Triangle();
+			if (v0.PlaneSide == Plane.Side.on)
 			{
 				//  v2 x-----x v1
 				//      \   /
@@ -154,9 +244,10 @@ namespace PopcornGenerator.Slicer
 				//        v0
 				var indices = duplicateIndices.GetHullIndices(v1.PlaneSide).SameSide;
 				int v0CopyIndex = GetCopyOfVertexOrCreateDuplicate(meshData, indices, v0.TriangleIndex);
-				newTriangle = new Triangle(v0CopyIndex, v1.TriangleIndex, v2.TriangleIndex);
+				triangle0 = new Triangle(v0CopyIndex, v1.TriangleIndex, v2.TriangleIndex);
+				//Debug.Log($"Duplicated vertex {v0.TriangleIndex} -> {v0CopyIndex}");
 			}
-			else if (v1.PlaneSide  == Plane.Side.on)
+			else if (v1.PlaneSide == Plane.Side.on)
 			{
 				//  v0 x-----x v2
 				//      \   /
@@ -165,9 +256,10 @@ namespace PopcornGenerator.Slicer
 				//        v1
 				var indices = duplicateIndices.GetHullIndices(v0.PlaneSide).SameSide;
 				int v1CopyIndex = GetCopyOfVertexOrCreateDuplicate(meshData, indices, v1.TriangleIndex);
-				newTriangle = new Triangle(v0.TriangleIndex, v1CopyIndex, v2.TriangleIndex);
+				triangle0 = new Triangle(v0.TriangleIndex, v1CopyIndex, v2.TriangleIndex);
+				//Debug.Log($"Duplicated vertex {v1.TriangleIndex} -> {v1CopyIndex}");
 			}
-			else if (v2.PlaneSide  == Plane.Side.on)
+			else if (v2.PlaneSide == Plane.Side.on)
 			{
 				//  v1 x-----x v0
 				//      \   /
@@ -176,16 +268,19 @@ namespace PopcornGenerator.Slicer
 				//        v2
 				var indices = duplicateIndices.GetHullIndices(v0.PlaneSide).SameSide;
 				int v2CopyIndex = GetCopyOfVertexOrCreateDuplicate(meshData, indices, v2.TriangleIndex);
-				newTriangle = new Triangle(v0.TriangleIndex, v1.TriangleIndex, v2CopyIndex);
+				triangle0 = new Triangle(v0.TriangleIndex, v1.TriangleIndex, v2CopyIndex);
+				//Debug.Log($"Duplicated vertex {v2.TriangleIndex} -> {v2CopyIndex}");
 			}
-			meshData.AddTriangle(newTriangle);
+			meshData.AddTriangle(triangle0);
+			//if (IsOneOfThemTriangles(triangle0)) DisplayProblemTriangle(triangle0, meshData, "DuplicateVertexOnPlaneAndAddTriangleToMeshData");
 		}
 
 		private static void DuplicateLineVerticesOnPlaneAndAddTriangleToMeshData(
 			MeshData meshData, Vertex v0, Vertex v1, Vertex v2, DuplicateIndices duplicateIndices
 		)
 		{
-			Triangle newTriangle = new Triangle();
+			//Debug.Log($"Slicing triangle {v0.TriangleIndex}, {v1.TriangleIndex}, {v2.TriangleIndex} in DuplicateLineVerticesOnPlaneAndAddTriangleToMeshData");
+			Triangle triangle0 = new Triangle();
 			if (v0.PlaneSide == Plane.Side.on && v1.PlaneSide == Plane.Side.on)
 			{
 				//        x v2
@@ -197,7 +292,9 @@ namespace PopcornGenerator.Slicer
 				int v0CopyIndex = GetCopyOfVertexOrCreateDuplicate(meshData, indices, v0.TriangleIndex);
 				int v1CopyIndex = GetCopyOfVertexOrCreateDuplicate(meshData, indices, v1.TriangleIndex);
 
-				newTriangle = new Triangle(v0CopyIndex, v1CopyIndex, v2.TriangleIndex);
+				triangle0 = new Triangle(v0CopyIndex, v1CopyIndex, v2.TriangleIndex);
+				//Debug.Log($"Duplicated vertex {v0.TriangleIndex} -> {v0CopyIndex}");
+				//Debug.Log($"Duplicated vertex {v1.TriangleIndex} -> {v1CopyIndex}");
 			}
 			else if (v0.PlaneSide == Plane.Side.on && v2.PlaneSide == Plane.Side.on)
 			{
@@ -210,7 +307,9 @@ namespace PopcornGenerator.Slicer
 				int v0CopyIndex = GetCopyOfVertexOrCreateDuplicate(meshData, indices, v0.TriangleIndex);
 				int v2CopyIndex = GetCopyOfVertexOrCreateDuplicate(meshData, indices, v2.TriangleIndex);
 
-				newTriangle = new Triangle(v0CopyIndex, v1.TriangleIndex, v2CopyIndex);
+				triangle0 = new Triangle(v0CopyIndex, v1.TriangleIndex, v2CopyIndex);
+				//Debug.Log($"Duplicated vertex {v0.TriangleIndex} -> {v0CopyIndex}");
+				//Debug.Log($"Duplicated vertex {v2.TriangleIndex} -> {v2CopyIndex}");
 			}
 			else if (v1.PlaneSide == Plane.Side.on && v2.PlaneSide == Plane.Side.on)
 			{
@@ -223,15 +322,19 @@ namespace PopcornGenerator.Slicer
 				int v1CopyIndex = GetCopyOfVertexOrCreateDuplicate(meshData, indices, v1.TriangleIndex);
 				int v2CopyIndex = GetCopyOfVertexOrCreateDuplicate(meshData, indices, v2.TriangleIndex);
 
-				newTriangle = new Triangle(v0.TriangleIndex, v1CopyIndex, v2CopyIndex);
+				triangle0 = new Triangle(v0.TriangleIndex, v1CopyIndex, v2CopyIndex);
+				//Debug.Log($"Duplicated vertex {v1.TriangleIndex} -> {v1CopyIndex}");
+				//Debug.Log($"Duplicated vertex {v2.TriangleIndex} -> {v2CopyIndex}");
 			}
-			meshData.AddTriangle(newTriangle);
+			meshData.AddTriangle(triangle0);
+			//if (IsOneOfThemTriangles(triangle0)) DisplayProblemTriangle(triangle0, meshData, "DuplicateLineVerticesOnPlaneAndAddTriangleToMeshData");
 		}
 
 		private static void CutTriangleInTwoTrianglesWherePlaneIntersectsAndAddThemToMeshData(
 			MeshData meshData, Vertex v0, Vertex v1, Vertex v2, DuplicateIndices duplicateIndices, Plane plane
 		)
 		{
+			//Debug.Log($"Slicing triangle {v0.TriangleIndex}, {v1.TriangleIndex}, {v2.TriangleIndex} in CutTriangleInTwoTrianglesWherePlaneIntersectsAndAddThemToMeshData");
 			Triangle triangle0 = new Triangle();
 			Triangle triangle1 = new Triangle();
 			float t;
@@ -321,12 +424,16 @@ namespace PopcornGenerator.Slicer
 			}
 			meshData.AddTriangle(triangle0);
 			meshData.AddTriangle(triangle1);
+
+			//if (IsOneOfThemTriangles(triangle0)) DisplayProblemTriangle(triangle0, meshData, "CutTriangleInTwoTrianglesWherePlaneIntersectsAndAddThemToMeshData");
+			//if (IsOneOfThemTriangles(triangle1)) DisplayProblemTriangle(triangle1, meshData, "CutTriangleInTwoTrianglesWherePlaneIntersectsAndAddThemToMeshData");
 		}
 
 		private static void CutTriangleInThreeTrianglesWherePlaneIntersetsAndAddThemToMeshData(
 			MeshData meshData, Vertex v0, Vertex v1, Vertex v2, DuplicateIndices duplicateIndices, Plane plane
 		)
 		{
+			//Debug.Log($"Slicing triangle {v0.TriangleIndex}, {v1.TriangleIndex}, {v2.TriangleIndex} in CutTriangleInThreeTrianglesWherePlaneIntersetsAndAddThemToMeshData");
 			float t, t1, t2;
 			Triangle triangle0 = new Triangle();
 			Triangle triangle1 = new Triangle();
@@ -410,6 +517,10 @@ namespace PopcornGenerator.Slicer
 			meshData.AddTriangle(triangle0);
 			meshData.AddTriangle(triangle1);
 			meshData.AddTriangle(triangle2);
+
+			//if (IsOneOfThemTriangles(triangle0)) DisplayProblemTriangle(triangle0, meshData, "CutTriangleInThreeTrianglesWherePlaneIntersetsAndAddThemToMeshData");
+			//if (IsOneOfThemTriangles(triangle1)) DisplayProblemTriangle(triangle1, meshData, "CutTriangleInThreeTrianglesWherePlaneIntersetsAndAddThemToMeshData");
+			//if (IsOneOfThemTriangles(triangle2)) DisplayProblemTriangle(triangle2, meshData, "CutTriangleInThreeTrianglesWherePlaneIntersetsAndAddThemToMeshData");
 		}
 
 		private static int AddCopyOfVertexToMeshDataAndGetIndex(MeshData meshData, Vertex v)
@@ -454,6 +565,124 @@ namespace PopcornGenerator.Slicer
 				zoneDuplicateIndices.Add(pair, indexCopy);
 			}
 			return indexCopy;
+		}
+
+		private static void GetSlicesAndAddThemToMeshData(MeshData meshData, Plane[] planes, ICollection<DuplicateIndices> duplicateIndices)
+		{
+			// Get the side for each vertex
+			Dictionary<int, Slice> slices = new Dictionary<int, Slice>();
+			//int[] sides = new int[meshData.Vertices.Count];
+			int sidesNum = -1;
+			for (int vertexIndex = 0; vertexIndex < meshData.Vertices.Count; ++vertexIndex)
+			{
+				int vertexSide = 0;
+				bool isOnBorder = false;
+				for (int planeIndex = 0; planeIndex < planes.Length; ++planeIndex)
+				{
+					Plane.Side side = planes[planeIndex].GetSide(meshData.Vertices[vertexIndex]);
+
+					switch (side)
+					{
+						case Plane.Side.up:
+							vertexSide |= 1 << planeIndex;
+							break;
+
+						case Plane.Side.down:
+							vertexSide &= ~(1 << planeIndex);
+							break;
+
+						case Plane.Side.on:
+							foreach (DuplicateIndices di in duplicateIndices)
+							{
+								if (di.UpperHullIndices.Contains(vertexIndex))
+								{
+									vertexSide |= 1 << planeIndex;
+									isOnBorder = true;
+									break;
+								}
+								if (di.LowerHullIndices.Contains(vertexIndex))
+								{
+									vertexSide &= ~(1 << planeIndex);
+									isOnBorder = true;
+									break;
+								}
+							}
+							break;
+					}
+				}
+				sidesNum = Mathf.Max(sidesNum, vertexSide);
+				//sides[vertexIndex] = vertexSide;
+				Slice slice = null;
+				if (!slices.TryGetValue(vertexSide, out slice))
+				{
+					slice = new Slice(new SliceAllIndicesCollection(), new SliceBorderIndicesCollection());
+					slices.Add(vertexSide, slice);
+				}
+
+				slice.AllIndices.Add(vertexIndex);
+				if (isOnBorder)
+				{
+					slice.BorderIndices.Add(vertexIndex);
+				}
+			}
+
+			foreach (Slice slice in slices.Values)
+			{
+				meshData.Slices.Add(slice);
+			}
+
+			/*
+			++sidesNum;
+			Debug.Log($"Number of sides: {sidesNum}");
+
+			GameObject[] sidesObjects = new GameObject[sidesNum];
+			for (int i = 0; i < sidesNum; ++i)
+			{
+				sidesObjects[i] = new GameObject($"Side {i}");
+			}
+
+			Color[] colors = new Color[] { Color.red, Color.green, Color.blue, Color.magenta, Color.cyan };
+			for (int vertexIndex = 0; vertexIndex < meshData.Vertices.Count; ++vertexIndex)
+			{
+				GameObject obj = GameObject.CreatePrimitive(PrimitiveType.Sphere);
+				obj.transform.name = $"Vertex {vertexIndex} Side {sides[vertexIndex]}";
+				obj.transform.parent = sidesObjects[sides[vertexIndex]].transform;
+				obj.transform.position = meshData.Vertices[vertexIndex];
+				obj.transform.localScale = new Vector3(0.008f, 0.008f, 0.008f);
+				obj.GetComponent<Renderer>().material.color = colors[sides[vertexIndex]];
+			}
+			*/
+		}
+
+		private static void RemoveTrianglesWithIndicesInDifferentSlices(MeshData meshData)
+		{
+			int[] verticesSlices = new int[meshData.Vertices.Count];
+			for (int vertexIndex = 0; vertexIndex < meshData.Vertices.Count; ++vertexIndex)
+			{
+				verticesSlices[vertexIndex] = -1;
+				for (int sliceIndex = 0; sliceIndex < meshData.Slices.Count; ++sliceIndex)
+				{
+					if (meshData.Slices[sliceIndex].AllIndices.Contains(vertexIndex))
+					{
+						verticesSlices[vertexIndex] = sliceIndex;
+						break;
+					}
+				}
+			}
+
+			for (int triangleIndex = meshData.Triangles.Count - 1; triangleIndex >= 0; --triangleIndex)
+			{
+				Triangle t = meshData.Triangles[triangleIndex];
+				int ri0 = verticesSlices[t.I0];
+				int ri1 = verticesSlices[t.I1];
+				int ri2 = verticesSlices[t.I2];
+
+				if (ri0 != ri1 || ri0 != ri2 || ri1 != ri2)
+				{
+					Debug.Log($"Deleting triangle {t} in zones {ri0}. {ri1}, {ri2}");
+					meshData.Triangles.RemoveAt(triangleIndex);
+				}
+			}
 		}
 	}
 }

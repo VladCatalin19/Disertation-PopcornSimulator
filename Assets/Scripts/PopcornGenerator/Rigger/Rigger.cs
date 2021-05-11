@@ -8,7 +8,7 @@ using SliceIndices = System.Collections.Generic.HashSet<int>;
 using RiggedPartCollection = System.Collections.Generic.List<PopcornGenerator.Rigger.RiggedPart>;
 using RiggedPartIdices = System.Collections.Generic.HashSet<int>;
 using SlicesRiggedPartsDictionary = System.Collections.Generic.Dictionary
-	<PopcornGenerator.Rigger.Slice, System.Collections.Generic.IList<PopcornGenerator.Rigger.RiggedPart>>;
+	<PopcornGenerator.Slicer.Slice, System.Collections.Generic.IList<PopcornGenerator.Rigger.RiggedPart>>;
 
 using Frontier = System.Collections.Generic.List<int>;
 using SlicesFrontiersDictionary = System.Collections.Generic.Dictionary
@@ -19,7 +19,7 @@ namespace PopcornGenerator.Rigger
 {
 	public static class Rigger
 	{
-		public static void Rig(GameObject gameObject, Plane[] riggingPlanes, Transform riggingRootBonePosition)
+		public static void Rig(GameObject gameObject, IList<Slicer.Slice> slices, Plane[] riggingPlanes, Transform riggingRootBonePosition)
 		{
 			if (!gameObject) throw new System.ArgumentNullException("gameObject");
 			if (riggingPlanes == null) throw new System.ArgumentNullException("riggingPlanes");
@@ -32,26 +32,26 @@ namespace PopcornGenerator.Rigger
 			if (riggingPlanes.Length == 0)
 				throw new System.ArgumentException("Provided array of planes is empty");
 
-			RigSlicedMesh(gameObject, meshFilter, riggingPlanes, riggingRootBonePosition);
+			RigSlicedMesh(gameObject, meshFilter, slices, riggingPlanes, riggingRootBonePosition);
 		}
 
 		private static void RigSlicedMesh(GameObject gameObject, MeshFilter meshFilter,
-			Plane[] riggingPlanes, Transform riggingRootBonePosition
+			IList<Slicer.Slice> slices, Plane[] riggingPlanes, Transform riggingRootBonePosition
 		)
 		{
 			Mesh mesh = meshFilter.mesh;
-			RiggerData riggerData = new RiggerData(gameObject, mesh.vertices, mesh.uv, mesh.triangles);
+			RiggerData riggerData = new RiggerData(gameObject, mesh.vertices, mesh.uv, mesh.triangles, slices);
 
 			TransformRiggerDataVerticesToWorldSpace(riggerData);
 
 			MeshGraph graph = CreateMeshGraph(riggerData);
-			SetRiggerDataSlices(riggerData, graph);
+			//SetRiggerDataSlices(riggerData, graph);
 			SliceSlicesByRiggingPlanes(riggerData, riggingPlanes);
 
 			RiggerResult riggingResult = CreateKernelRig(graph, riggerData, riggingRootBonePosition);
 			RigKernel(riggingResult, gameObject, meshFilter);
 
-
+			/*
 			riggerData.SlicesFrontiers = new SlicesFrontiersDictionary();
 			foreach (Slice slice in riggerData.Slices)
 			{
@@ -59,11 +59,12 @@ namespace PopcornGenerator.Rigger
 				riggerData.SlicesFrontiers[slice] = frontier;
 				break;
 			}
-
+			*/
+			
 			#if DEBUG
 			TransformRiggerDataVerticesToLocalSpace(riggerData);
-			AddGraphVisualizerComponent(graph, riggerData);
-			AddBoneVisualizerComponent(gameObject, riggingResult);
+			//AddGraphVisualizerComponent(graph, riggerData);
+			//AddBoneVisualizerComponent(gameObject, riggingResult);
 			#endif
 		}
 
@@ -113,22 +114,35 @@ namespace PopcornGenerator.Rigger
 		private static void SetRiggerDataSlices(RiggerData riggerData, MeshGraph graph)
 		{
 			bool[] visited = new bool[graph.VertexCount];
-			SliceCollection slices = new SliceCollection();
+			var slices = new List<Slicer.Slice>();
 
 			for (int i = 0; i < graph.VertexCount; ++i)
 			{
 				if (!visited[i])
 				{
-					Slice slice = BreadthFirstSearch(graph, i, visited);
+					Slicer.Slice slice = BreadthFirstSearch(graph, i, visited);
 					slices.Add(slice);
+				}
+			}
+
+			if (slices.Count != riggerData.Slices.Count)
+			{
+				throw new System.Exception($"Slices count not matching, slices.Count {slices.Count}, riggerData.Slices.Count {riggerData.Slices.Count}");
+			}
+			for (int i = 0; i < slices.Count; ++i)
+			{
+				riggerData.Slices[i].AllIndices.Clear();
+				for (int j = 0; j < slices[i].AllIndices.Count; ++j)
+				{
+					riggerData.Slices[i].AllIndices.Add(slices[i].AllIndices[j]);
 				}
 			}
 			riggerData.Slices = slices;
 		}
 
-		private static Slice BreadthFirstSearch(MeshGraph graph, int start, bool[] visited)
+		private static Slicer.Slice BreadthFirstSearch(MeshGraph graph, int start, bool[] visited)
 		{
-			Slice slice = new Slice(new SliceIndices());
+			Slicer.Slice slice = new Slicer.Slice(new List<int>(), new List<int>());
 
 			Queue<int> q = new Queue<int>();
 			q.Enqueue(start);
@@ -142,7 +156,7 @@ namespace PopcornGenerator.Rigger
 				}
 
 				visited[index] = true;
-				slice.Indices.Add(index);
+				slice.AllIndices.Add(index);
 
 				foreach (int neighbor in graph.GetNeighbors(index))
 				{
@@ -158,30 +172,38 @@ namespace PopcornGenerator.Rigger
 		private static void SliceSlicesByRiggingPlanes(RiggerData riggerData, Plane[] riggingPlanes)
 		{
 			SlicesRiggedPartsDictionary riggedPartDictionary = new SlicesRiggedPartsDictionary();
-			for (int i = 0; i < riggerData.Slices.Count; ++i)
+			foreach (Slicer.Slice slice in riggerData.Slices)
 			{
-				Slice slice = riggerData.Slices[i];
+				//Slice slice = riggerData.Slices[i];
 				RiggedPartCollection riggedParts = SplitSliceByRiggingPlane(riggerData, slice, riggingPlanes);
 				riggedPartDictionary[slice] = riggedParts;
 			}
 			riggerData.SlicesRiggedParts = riggedPartDictionary;
 		}
 
-		private static RiggedPartCollection SplitSliceByRiggingPlane(RiggerData riggerData, Slice slice, Plane[] riggingPlanes)
+		private static RiggedPartCollection SplitSliceByRiggingPlane(RiggerData riggerData, Slicer.Slice slice, Plane[] riggingPlanes)
 		{
 			var riggedParts = new RiggedPartCollection(riggingPlanes.Length + 1);
 
 			for (int i = 0; i < riggingPlanes.Length + 1; ++i)
 			{
-				riggedParts.Add(new RiggedPart(new RiggedPartIdices()));
+				riggedParts.Add(new RiggedPart(new RiggedPartIdices(), new RiggedPartIdices()));
 			}
 
-			foreach (int index in slice.Indices)
+			foreach (int index in slice.AllIndices)
 			{
 				Vector3 position = riggerData.Vertices[index];
 				int betweenPlanesPosition = GetVertexPositionBetweenPlanes(position, riggingPlanes);
-				riggedParts[betweenPlanesPosition].Indices.Add(index);
+				riggedParts[betweenPlanesPosition].AllIndices.Add(index);
 			}
+
+			foreach (int index in slice.BorderIndices)
+			{
+				Vector3 position = riggerData.Vertices[index];
+				int betweenPlanesPosition = GetVertexPositionBetweenPlanes(position, riggingPlanes);
+				riggedParts[betweenPlanesPosition].BorderIndices.Add(index);
+			}
+
 			return riggedParts;
 		}
 
@@ -275,11 +297,13 @@ namespace PopcornGenerator.Rigger
 			Transform rootBone = riggingResult.Bones[0];
 			// Ignore root bone's index
 			int boneIndex = 1;
+			int iteration = 0;
 			foreach (var keyEntry in riggerData.SlicesRiggedParts)
 			{
-				Slice slice = keyEntry.Key;
+				//Slice slice = keyEntry.Key;
 				Transform prevBone = rootBone;
 				int rigZoneIndex = 0;
+
 				foreach (RiggedPart riggedPart in keyEntry.Value)
 				{
 					PositionAndRotation posnNorm = CalculateRiggedPartBonePosition(riggedPart, riggerData, rigZoneIndex == 0);
@@ -299,7 +323,7 @@ namespace PopcornGenerator.Rigger
 					prevBone = riggingResult.Bones[boneIndex];
 					//riggedPart.Bone = riggingResult.Bones[boneIndex];
 
-					foreach (int index in riggedPart.Indices)
+					foreach (int index in riggedPart.AllIndices)
 					{
 						boneIndices[index] = boneIndex;
 						riggingResult.BoneWeights[index].boneIndex0 = boneIndex;
@@ -309,6 +333,45 @@ namespace PopcornGenerator.Rigger
 					++boneIndex;
 					++rigZoneIndex;
 				}
+
+
+				/*
+				Color[] sideColors = new Color[] { Color.red, Color.green, Color.blue, Color.magenta, Color.cyan };
+				Color[] borderColors = new Color[] { Color.white, Color.black, Color.yellow, new Color(1.0f, 165.0f / 255.0f, 0.0f) };
+				rigZoneIndex = 0;
+				foreach (RiggedPart riggedPart in keyEntry.Value)
+				{
+					
+					HashSet<int> hs = new HashSet<int>(riggedPart.BorderIndices);
+					foreach (int vertexIndex in riggedPart.AllIndices)
+					{
+						if (hs.Contains(vertexIndex))
+						{
+							continue;
+						}
+						GameObject obj = GameObject.CreatePrimitive(PrimitiveType.Sphere);
+						obj.transform.name = $"Vertex {vertexIndex} Side {rigZoneIndex}";
+						obj.transform.parent = riggingResult.Bones[boneIndices[vertexIndex]];
+						obj.transform.position = riggerData.Vertices[vertexIndex];
+						obj.transform.localScale = new Vector3(0.008f, 0.008f, 0.008f);
+						obj.GetComponent<Renderer>().material.color = sideColors[(rigZoneIndex + iteration) % sideColors.Length];
+					}
+					
+					
+
+					foreach (int vertexIndex in riggedPart.BorderIndices)
+					{
+						GameObject obj = GameObject.CreatePrimitive(PrimitiveType.Sphere);
+						obj.transform.name = $"Vertex {vertexIndex} Side {rigZoneIndex}";
+						obj.transform.parent = riggingResult.Bones[boneIndices[vertexIndex]];
+						obj.transform.position = riggerData.Vertices[vertexIndex];
+						obj.transform.localScale = new Vector3(0.0007f, 0.0007f, 0.0007f);
+						obj.GetComponent<Renderer>().material.color = Color.yellow;
+					}
+					++rigZoneIndex;
+				}
+				++iteration;
+				*/
 			}
 
 			/*
@@ -354,15 +417,15 @@ namespace PopcornGenerator.Rigger
 
 		private static RiggedPartWithVertices GetRiggedPartWithVertices(RiggedPart riggedPart, RiggerData riggerData)
 		{
-			Vector3[] vertices = new Vector3[riggedPart.Indices.Count];
+			Vector3[] vertices = new Vector3[riggedPart.AllIndices.Count];
 
 			int i = 0;
-			foreach (int index in riggedPart.Indices)
+			foreach (int index in riggedPart.AllIndices)
 			{
 				vertices[i++] = riggerData.Vertices[index];
 			}
 
-			return new RiggedPartWithVertices(vertices, riggedPart.Indices);
+			return new RiggedPartWithVertices(vertices, riggedPart.AllIndices);
 		}
 
 		private static Vector3 CalculateSliceMeanNormal(RiggedPartWithVertices riggedPartVertices, RiggerData riggerData)

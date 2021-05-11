@@ -30,5 +30,11 @@ namespace PopcornGenerator.Slicer
 				throw new System.IndexOutOfRangeException("Invalid Triangle index");
 			}
 		}
+
+        public override string ToString()
+        {
+            return $"({i0}, {i1}, {i2})";
+        }
+    
 	}
 }
