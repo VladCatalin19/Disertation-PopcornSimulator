@@ -2,7 +2,7 @@
 
 namespace PopcornGenerator.Rigger
 {
-	internal class Graph<TVertex>
+	public class Graph<TVertex>
 	{
 		IDictionary<TVertex, ICollection<TVertex>> graph;
 
@@ -96,7 +96,7 @@ namespace PopcornGenerator.Rigger
 		{
 			if (vertex == null) throw new System.ArgumentNullException("vertex");
 			if (!graph.ContainsKey(vertex))
-				throw new System.ArgumentException("The vertex already exists in the Graph<TVertex>");
+				throw new System.ArgumentException($"The vertex {vertex} does not exist in the Graph<TVertex>");
 			
 			return graph[vertex];
 		}

@@ -19,7 +19,7 @@ namespace PopcornGenerator.Rigger
 {
 	public static class Rigger
 	{
-		public static void Rig(GameObject gameObject, IList<Slicer.Slice> slices, Plane[] riggingPlanes, Transform riggingRootBonePosition)
+		public static MeshGraph Rig(GameObject gameObject, IList<Slicer.Slice> slices, Plane[] riggingPlanes, Transform riggingRootBonePosition)
 		{
 			if (!gameObject) throw new System.ArgumentNullException("gameObject");
 			if (riggingPlanes == null) throw new System.ArgumentNullException("riggingPlanes");
@@ -32,10 +32,10 @@ namespace PopcornGenerator.Rigger
 			if (riggingPlanes.Length == 0)
 				throw new System.ArgumentException("Provided array of planes is empty");
 
-			RigSlicedMesh(gameObject, meshFilter, slices, riggingPlanes, riggingRootBonePosition);
+			return RigSlicedMesh(gameObject, meshFilter, slices, riggingPlanes, riggingRootBonePosition);
 		}
 
-		private static void RigSlicedMesh(GameObject gameObject, MeshFilter meshFilter,
+		private static MeshGraph RigSlicedMesh(GameObject gameObject, MeshFilter meshFilter,
 			IList<Slicer.Slice> slices, Plane[] riggingPlanes, Transform riggingRootBonePosition
 		)
 		{
@@ -46,6 +46,7 @@ namespace PopcornGenerator.Rigger
 
 			MeshGraph graph = CreateMeshGraph(riggerData);
 			//SetRiggerDataSlices(riggerData, graph);
+			//DoOutlineStuff(graph, riggerData);
 			SliceSlicesByRiggingPlanes(riggerData, riggingPlanes);
 
 			RiggerResult riggingResult = CreateKernelRig(graph, riggerData, riggingRootBonePosition);
@@ -66,6 +67,7 @@ namespace PopcornGenerator.Rigger
 			//AddGraphVisualizerComponent(graph, riggerData);
 			//AddBoneVisualizerComponent(gameObject, riggingResult);
 			#endif
+			return graph;
 		}
 
 		private static void TransformRiggerDataVerticesToWorldSpace(RiggerData riggerData)
@@ -109,6 +111,83 @@ namespace PopcornGenerator.Rigger
 			}
 
 			return graph;
+		}
+
+		private static void DoOutlineStuff(MeshGraph graph, RiggerData riggerData)
+		{
+			foreach (Slicer.Slice slice in riggerData.Slices)
+			{
+				HashSet<int> borderIndicesHashSet = new HashSet<int>(slice.BorderIndices);
+
+				// TODO maybe use a faster method?
+				// https://www.geeksforgeeks.org/maximum-and-minimum-in-an-array/#82d2079a-8120-480f-9fc7-5cda825d56e7
+				float maxY = float.MinValue, minY = float.MaxValue;
+				int maxIndex = -1, minIndex = -1;
+
+				foreach (int index in slice.BorderIndices)
+				{
+					if (riggerData.Vertices[index].y > maxY)
+					{
+						maxY = riggerData.Vertices[index].y;
+						maxIndex = index;
+					}
+					if (riggerData.Vertices[index].y < minY)
+					{
+						minY = riggerData.Vertices[index].y;
+						minIndex = index;
+					}
+				}
+
+				int GetNeighborOnBorder(int index, int prevIndex)
+				{
+					foreach (int neighbor in graph.GetNeighbors(index))
+					{
+						if (neighbor != prevIndex && borderIndicesHashSet.Contains(neighbor))
+						{
+							return neighbor;
+						}
+					}
+					return -1;
+				}
+
+				//Debug.Log($"Min vertex index: {minIndex}");
+				//Debug.Log($"Graph indices: {graph.VertexCount}");
+
+				int prevIndex = minIndex;
+				int currentIndex = GetNeighborOnBorder(prevIndex, -1);
+
+				IList<int> orderedBorderIndices = new List<int>();
+				orderedBorderIndices.Add(prevIndex);
+				orderedBorderIndices.Add(currentIndex);
+
+				int maxIter = 5000;
+				while (currentIndex != minIndex && --maxIter > 0)
+				{
+					int nextIndex = GetNeighborOnBorder(currentIndex, prevIndex);
+					prevIndex = currentIndex;
+					currentIndex = nextIndex;
+					orderedBorderIndices.Add(currentIndex);
+				}
+				if (maxIter == 0)
+				{
+					Debug.Log($"Mission Failed! We'll get them next time!");
+				}
+				Debug.Log($"Normal Count: {slice.BorderIndices.Count} Ordered Count: {orderedBorderIndices.Count}");
+
+				/*
+				GameObject go1 = GameObject.CreatePrimitive(PrimitiveType.Sphere);
+				GameObject go2 = GameObject.CreatePrimitive(PrimitiveType.Sphere);
+
+				go1.name = $"Min point";
+				go1.transform.position = riggerData.Vertices[minIndex];
+
+				go2.name = $"Max point";
+				go2.transform.position = riggerData.Vertices[maxIndex];
+
+				go1.transform.localScale = go2.transform.localScale = 0.001f * Vector3.one;
+				go1.GetComponent<Renderer>().material.color = go2.GetComponent<Renderer>().material.color = Random.ColorHSV();
+				*/
+			}
 		}
 
 		private static void SetRiggerDataSlices(RiggerData riggerData, MeshGraph graph)

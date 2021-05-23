@@ -29,20 +29,47 @@ namespace PopcornGenerator.Slicer
 			TransformMeshDataVerticesToWorldSpace(meshData, spaceTransform);
 			DuplicateIndices[] duplicateIndices = SliceMeshTriangles(meshData, planes);
 			GetSlicesAndAddThemToMeshData(meshData, planes, duplicateIndices);
-			meshData.RemoveUnusedVertices();
+			//meshData.RemoveUnusedVertices();
 
-			/*
+			
 			GameObject[] sidesObjects = new GameObject[meshData.Slices.Count];
 			for (int i = 0; i < sidesObjects.Length; ++i)
 			{
 				sidesObjects[i] = new GameObject($"Side {i}");
 			}
 
+			Color[] diColors = new Color[] { Color.white, Color.black, Color.yellow, new Color(1.0f, 165.0f / 255.0f, 0.0f) };
+			for (int diIndex = 0; diIndex < duplicateIndices.Length; ++diIndex)
+			{
+				foreach (int index in duplicateIndices[diIndex].UpperHullIndices)
+				{
+					GameObject obj = GameObject.CreatePrimitive(PrimitiveType.Cube);
+					obj.transform.name = $"Upper Index {index}";
+					obj.transform.parent = sidesObjects[diIndex].transform;
+					obj.transform.position = meshData.Vertices[index];
+					obj.transform.localScale = 0.0007f * Vector3.one;
+					obj.GetComponent<Renderer>().material.color = diColors[diIndex];
+				}
+
+				foreach (int index in duplicateIndices[diIndex].LowerHullIndices)
+				{
+					GameObject obj = GameObject.CreatePrimitive(PrimitiveType.Cylinder);
+					obj.transform.name = $"Lower Index {index}";
+					obj.transform.parent = sidesObjects[diIndex].transform;
+					obj.transform.position = meshData.Vertices[index];
+					obj.transform.localScale = 0.0007f * Vector3.one;
+					obj.GetComponent<Renderer>().material.color = diColors[diIndex];
+				}
+			}
+
+			/*
 			Color[] sideColors = new Color[] { Color.red, Color.green, Color.blue, Color.magenta, Color.cyan };
 			Color[] borderColors = new Color[] { Color.white, Color.black, Color.yellow, new Color(1.0f, 165.0f / 255.0f, 0.0f) };
-			int sliceIndex = 0;
-			foreach (Slice slice in meshData.Slices)
+
+			for (int sliceIndex = 0; sliceIndex < meshData.Slices.Count; ++sliceIndex)
 			{
+				Slice slice = meshData.Slices[sliceIndex];
+				
 				foreach (int vertexIndex in slice.AllIndices)
 				{
 					GameObject obj = GameObject.CreatePrimitive(PrimitiveType.Sphere);
@@ -52,22 +79,23 @@ namespace PopcornGenerator.Slicer
 					obj.transform.localScale = new Vector3(0.008f, 0.008f, 0.008f);
 					obj.GetComponent<Renderer>().material.color = sideColors[sliceIndex];
 				}
+				
 
 				foreach (int vertexIndex in slice.BorderIndices)
 				{
-					GameObject obj = GameObject.CreatePrimitive(PrimitiveType.Sphere);
+					GameObject obj = GameObject.CreatePrimitive(PrimitiveType.Cube);
 					obj.transform.name = $"Vertex {vertexIndex} Side {sliceIndex}";
 					obj.transform.parent = sidesObjects[sliceIndex].transform;
 					obj.transform.position = meshData.Vertices[vertexIndex];
-					obj.transform.localScale = new Vector3(0.009f, 0.009f, 0.009f);
+					obj.transform.localScale = 0.0007f * Vector3.one;
 					obj.GetComponent<Renderer>().material.color = borderColors[sliceIndex];
 				}
-				++sliceIndex;
+
 			}
 			*/
 
 			// TODO Remove this and fix slicer
-			RemoveTrianglesWithIndicesInDifferentSlices(meshData);
+			//RemoveTrianglesWithIndicesInDifferentSlices(meshData);
 
 			TransformMeshDataVerticesToLocalSpace(meshData, spaceTransform);
 			meshData.ToMesh(mesh);
@@ -567,7 +595,7 @@ namespace PopcornGenerator.Slicer
 			return indexCopy;
 		}
 
-		private static void GetSlicesAndAddThemToMeshData(MeshData meshData, Plane[] planes, ICollection<DuplicateIndices> duplicateIndices)
+		private static void GetSlicesAndAddThemToMeshData(MeshData meshData, Plane[] planes, IList<DuplicateIndices> duplicateIndices)
 		{
 			// Get the side for each vertex
 			Dictionary<int, Slice> slices = new Dictionary<int, Slice>();
@@ -592,19 +620,19 @@ namespace PopcornGenerator.Slicer
 							break;
 
 						case Plane.Side.on:
-							foreach (DuplicateIndices di in duplicateIndices)
+							//foreach (DuplicateIndices di in duplicateIndices)
 							{
-								if (di.UpperHullIndices.Contains(vertexIndex))
+								if (duplicateIndices[planeIndex].UpperHullIndices.Contains(vertexIndex))
 								{
 									vertexSide |= 1 << planeIndex;
 									isOnBorder = true;
-									break;
+									//break;
 								}
-								if (di.LowerHullIndices.Contains(vertexIndex))
+								if (duplicateIndices[planeIndex].LowerHullIndices.Contains(vertexIndex))
 								{
 									vertexSide &= ~(1 << planeIndex);
 									isOnBorder = true;
-									break;
+									//break;
 								}
 							}
 							break;

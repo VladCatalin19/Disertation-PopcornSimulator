@@ -7,6 +7,7 @@ namespace PopcornGenerator.Rigger
 	{
 		private readonly IList<Vector3> vertices;
 		private readonly IList<int> indices;
+		// TODO maybe add here a hashset with all vertices
 
 		public RiggedPartWithVertices(IList<Vector3> vertices, ICollection<int> indices)
 		{

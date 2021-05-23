@@ -59,7 +59,7 @@ namespace PopcornGenerator
 			//ObjExporter.WriteMesh(kernel, @"/home/vlad/Unity/Projects/Popcorn Test/Kernel.obj");
 
 			Plane[] riggingPlanesRigger = TransformsToPlanes(riggingPlanes);
-			Rigger.Rigger.Rig(kernel, slices, riggingPlanesRigger, riggingRootBonePosition);
+			Rigger.Graph<int> graph = Rigger.Rigger.Rig(kernel, slices, riggingPlanesRigger, riggingRootBonePosition);
 
 			Animator.Animator.Animate(kernel);
 
