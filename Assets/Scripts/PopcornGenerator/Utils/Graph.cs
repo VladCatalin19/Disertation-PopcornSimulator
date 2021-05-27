@@ -1,10 +1,10 @@
 ﻿using System.Collections.Generic;
 
-namespace PopcornGenerator.Rigger
+namespace PopcornGenerator
 {
 	public class Graph<TVertex>
 	{
-		IDictionary<TVertex, ICollection<TVertex>> graph;
+		private readonly IDictionary<TVertex, ICollection<TVertex>> graph;
 
 		public Graph(int capacity = 8)
 		{
@@ -96,7 +96,7 @@ namespace PopcornGenerator.Rigger
 		{
 			if (vertex == null) throw new System.ArgumentNullException("vertex");
 			if (!graph.ContainsKey(vertex))
-				throw new System.ArgumentException($"The vertex {vertex} does not exist in the Graph<TVertex>");
+				throw new System.ArgumentException($"The vertex does not exist in the Graph<TVertex>");
 			
 			return graph[vertex];
 		}

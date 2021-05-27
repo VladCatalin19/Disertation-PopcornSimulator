@@ -1,20 +1,31 @@
-﻿using System.Collections.Generic;
+using System.Collections.Generic;
 using UnityEngine;
 
-namespace PopcornGenerator.Slicer
+namespace PopcornGenerator
 {
-	public class Slice
+	internal struct Slice
 	{
-		private IList<int> allIndices;
-		private IList<int> borderIndices;
+		private readonly Mesh mesh;
+		private readonly IList<int> borderIndicesList;
+		private readonly ISet<int> borderIndicesSet;
 
-		public Slice(IList<int> allIndices, IList<int> borderIndices)
+		public Slice(Mesh mesh) : this(mesh, new List<int>(), new HashSet<int>()) { }
+
+		public Slice(Mesh mesh, IList<int> borderIndicesList, ISet<int> borderIndicesSet)
 		{
-			this.allIndices = allIndices;
-			this.borderIndices = borderIndices;
+			this.mesh = mesh;
+			this.borderIndicesList = borderIndicesList;
+			this.borderIndicesSet = borderIndicesSet;
 		}
 
-		public IList<int> AllIndices { get => allIndices; }
-		public IList<int> BorderIndices { get => borderIndices; }
+		public Mesh Mesh { get => mesh; }
+		public IList<int> BorderIndicesList { get => borderIndicesList; }
+		public ISet<int> BorderIndicesSet { get => borderIndicesSet; }
+
+		public void AddBorderIndex(int index)
+		{
+			borderIndicesList.Add(index);
+			borderIndicesSet.Add(index);
+		}
 	}
 }

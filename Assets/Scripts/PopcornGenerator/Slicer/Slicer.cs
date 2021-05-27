@@ -1,234 +1,128 @@
 ﻿using System.Collections.Generic;
+using System.Runtime.CompilerServices;
 using UnityEngine;
 
-using DuplicatedIndicesCollection = System.Collections.Generic.Dictionary<PopcornGenerator.Slicer.IndicesPair, int>;
-using SliceAllIndicesCollection = System.Collections.Generic.List<int>;
-using SliceBorderIndicesCollection = System.Collections.Generic.List<int>;
-
-namespace PopcornGenerator.Slicer
+namespace PopcornGenerator
 {
-	public static class Slicer
+	// TODO Bug: some triangles are flipped
+	internal static class Slicer
 	{
-		public static IList<Slice> Slice(GameObject gameObject, UnityEngine.Plane[] cuttingPlanes)
+		public static IList<Slice> SliceMesh(Mesh mesh, IList<Plane> cuttingPlanes)
 		{
-			if (!gameObject) throw new System.ArgumentNullException("gameObject");
-			if (cuttingPlanes == null) throw new System.ArgumentNullException("cuttingPlanes");
-
-			MeshFilter meshFilter = gameObject.GetComponent<MeshFilter>();
-			if (!meshFilter)
-				throw new System.ArgumentException("Provided GameObject does not have a MeshFilter component");
-
-			return SliceMesh(meshFilter.mesh, cuttingPlanes, gameObject.transform);
+			IList<Slice> resultingSlices = SliceMeshIntoSlices(mesh, cuttingPlanes);
+			SetMeshesBorderIndices(resultingSlices, cuttingPlanes);
+			return resultingSlices;
 		}
 
-		private static IList<Slice> SliceMesh(Mesh mesh, UnityEngine.Plane[] cuttingPlanes, Transform spaceTransform)
+		private static IList<Slice> SliceMeshIntoSlices(Mesh mesh, IList<Plane> cuttingPlanes)
 		{
-			MeshData meshData = new MeshData(mesh);
-			Plane[] planes = UnityPlanesToSlicerPlanes(cuttingPlanes);
+			int approxNumberOfSlices = (int)System.Math.Pow(2, cuttingPlanes.Count);
+			var toCutSliceWrappers = new List<SliceBuildingWrapper>(approxNumberOfSlices);
+			var resultingSliceWrappers = new List<SliceBuildingWrapper>(approxNumberOfSlices);
 
-			TransformMeshDataVerticesToWorldSpace(meshData, spaceTransform);
-			DuplicateIndices[] duplicateIndices = SliceMeshTriangles(meshData, planes);
-			GetSlicesAndAddThemToMeshData(meshData, planes, duplicateIndices);
-			//meshData.RemoveUnusedVertices();
+			toCutSliceWrappers.Add(new SliceBuildingWrapper(new Slice(mesh)));
 
-			
-			GameObject[] sidesObjects = new GameObject[meshData.Slices.Count];
-			for (int i = 0; i < sidesObjects.Length; ++i)
+			for (int planeIndex = 0; planeIndex < cuttingPlanes.Count; ++planeIndex)
 			{
-				sidesObjects[i] = new GameObject($"Side {i}");
-			}
-
-			Color[] diColors = new Color[] { Color.white, Color.black, Color.yellow, new Color(1.0f, 165.0f / 255.0f, 0.0f) };
-			for (int diIndex = 0; diIndex < duplicateIndices.Length; ++diIndex)
-			{
-				foreach (int index in duplicateIndices[diIndex].UpperHullIndices)
+				for (int toCutIndex = 0; toCutIndex < toCutSliceWrappers.Count; ++toCutIndex)
 				{
-					GameObject obj = GameObject.CreatePrimitive(PrimitiveType.Cube);
-					obj.transform.name = $"Upper Index {index}";
-					obj.transform.parent = sidesObjects[diIndex].transform;
-					obj.transform.position = meshData.Vertices[index];
-					obj.transform.localScale = 0.0007f * Vector3.one;
-					obj.GetComponent<Renderer>().material.color = diColors[diIndex];
-				}
-
-				foreach (int index in duplicateIndices[diIndex].LowerHullIndices)
-				{
-					GameObject obj = GameObject.CreatePrimitive(PrimitiveType.Cylinder);
-					obj.transform.name = $"Lower Index {index}";
-					obj.transform.parent = sidesObjects[diIndex].transform;
-					obj.transform.position = meshData.Vertices[index];
-					obj.transform.localScale = 0.0007f * Vector3.one;
-					obj.GetComponent<Renderer>().material.color = diColors[diIndex];
-				}
-			}
-
-			/*
-			Color[] sideColors = new Color[] { Color.red, Color.green, Color.blue, Color.magenta, Color.cyan };
-			Color[] borderColors = new Color[] { Color.white, Color.black, Color.yellow, new Color(1.0f, 165.0f / 255.0f, 0.0f) };
-
-			for (int sliceIndex = 0; sliceIndex < meshData.Slices.Count; ++sliceIndex)
-			{
-				Slice slice = meshData.Slices[sliceIndex];
-				
-				foreach (int vertexIndex in slice.AllIndices)
-				{
-					GameObject obj = GameObject.CreatePrimitive(PrimitiveType.Sphere);
-					obj.transform.name = $"Vertex {vertexIndex} Side {sliceIndex}";
-					obj.transform.parent = sidesObjects[sliceIndex].transform;
-					obj.transform.position = meshData.Vertices[vertexIndex];
-					obj.transform.localScale = new Vector3(0.008f, 0.008f, 0.008f);
-					obj.GetComponent<Renderer>().material.color = sideColors[sliceIndex];
-				}
-				
-
-				foreach (int vertexIndex in slice.BorderIndices)
-				{
-					GameObject obj = GameObject.CreatePrimitive(PrimitiveType.Cube);
-					obj.transform.name = $"Vertex {vertexIndex} Side {sliceIndex}";
-					obj.transform.parent = sidesObjects[sliceIndex].transform;
-					obj.transform.position = meshData.Vertices[vertexIndex];
-					obj.transform.localScale = 0.0007f * Vector3.one;
-					obj.GetComponent<Renderer>().material.color = borderColors[sliceIndex];
-				}
-
-			}
-			*/
-
-			// TODO Remove this and fix slicer
-			//RemoveTrianglesWithIndicesInDifferentSlices(meshData);
-
-			TransformMeshDataVerticesToLocalSpace(meshData, spaceTransform);
-			meshData.ToMesh(mesh);
-
-			return meshData.Slices;
-		}
-
-		private static void TransformMeshDataVerticesToWorldSpace(MeshData meshData, Transform transform)
-		{
-			for (int i = 0; i < meshData.Vertices.Count; ++i)
-			{
-				meshData.Vertices[i] = transform.TransformPoint(meshData.Vertices[i]);
-			}
-		}
-
-		private static void TransformMeshDataVerticesToLocalSpace(MeshData meshData, Transform transform)
-		{
-			for (int i = 0; i < meshData.Vertices.Count; ++i)
-			{
-				meshData.Vertices[i] = transform.InverseTransformPoint(meshData.Vertices[i]);
-			}
-		}
-
-		private static DuplicateIndices[] SliceMeshTriangles(MeshData meshData, Plane[] planes)
-		{
-			DuplicateIndices[] duplicateIndices = new DuplicateIndices[planes.Length];
-
-			for (int planeIndex = 0; planeIndex < planes.Length; ++planeIndex)
-			{
-				//Debug.Log($"Plane {planeIndex}");
-
-				int maxTriangleIndex = meshData.Triangles.Count;
-				duplicateIndices[planeIndex] = new DuplicateIndices(new DuplicatedIndicesCollection(), new DuplicatedIndicesCollection());
-
-				for (int triangleIndex = 0; triangleIndex < maxTriangleIndex; ++triangleIndex)
-				{
-					bool shouldDeleteTriangle = SliceTriangleAndAddToMeshData(
-						meshData, triangleIndex, planes[planeIndex], duplicateIndices[planeIndex]
+					TwoSliceBuildingsWrapper twoSlices = SliceSlice(
+						toCutSliceWrappers[toCutIndex].Slice, cuttingPlanes[planeIndex]
 					);
-					if (shouldDeleteTriangle)
+					resultingSliceWrappers.Add(twoSlices.LowerSliceWrapper);
+					resultingSliceWrappers.Add(twoSlices.UpperSliceWrapper);
+				}
+
+				if (planeIndex != cuttingPlanes.Count - 1)
+				{
+					// Instead of copying the elements from one list to the other,
+					// we just interchange the references
+					// It is faster this way
+					var auxList = toCutSliceWrappers;
+					toCutSliceWrappers = resultingSliceWrappers;
+					resultingSliceWrappers = auxList;
+					resultingSliceWrappers.Clear();
+				}
+			}
+			return ConvertSliceBuildingWrappersToSlices(resultingSliceWrappers);
+		}
+
+		private static IList<Slice> ConvertSliceBuildingWrappersToSlices(
+			IList<SliceBuildingWrapper> sliceBuildingWrappers
+		)
+		{
+			IList<Slice> resultingSlices = new List<Slice>(sliceBuildingWrappers.Count);
+			for (int sliceIndex = 0; sliceIndex < sliceBuildingWrappers.Count; ++sliceIndex)
+			{
+				resultingSlices.Add(sliceBuildingWrappers[sliceIndex].Slice);
+			}
+			return resultingSlices;
+		}
+
+		private static void SetMeshesBorderIndices(IList<Slice> resultingSlices, IList<Plane> cuttingPlanes)
+		{
+			for (int sliceIndex = 0; sliceIndex < resultingSlices.Count; ++sliceIndex)
+			{
+				Slice slice = resultingSlices[sliceIndex];
+				IList<Vertex> vertices = slice.Mesh.Vertices;
+				for (int vertexIndex = 0; vertexIndex < vertices.Count; ++vertexIndex)
+				{
+					Vertex vertex = vertices[vertexIndex];
+					for (int planeIndex = 0; planeIndex < cuttingPlanes.Count; ++planeIndex)
 					{
-						meshData.RemoveTriangleAt(triangleIndex);
-						--maxTriangleIndex;
-						--triangleIndex;
+						if (cuttingPlanes[planeIndex].GetSide(vertex.Position) == Plane.Side.on)
+						{
+							slice.AddBorderIndex(vertexIndex);
+							break;
+						}
 					}
 				}
 			}
-
-			return duplicateIndices;
 		}
 
-		private static Plane[] UnityPlanesToSlicerPlanes(UnityEngine.Plane[] unityPlanes)
+		private static TwoSliceBuildingsWrapper SliceSlice(Slice slice, Plane cuttingPlane)
 		{
-			Plane[] planes = new Plane[unityPlanes.Length];
+			TwoSliceBuildingsWrapper twoSliceWrappers = new TwoSliceBuildingsWrapper
+			(
+				new SliceBuildingWrapper(new Slice(new Mesh(slice.Mesh.HasNormals, slice.Mesh.HasUVs))),
+				new SliceBuildingWrapper(new Slice(new Mesh(slice.Mesh.HasNormals, slice.Mesh.HasUVs)))
+			);
 
-			for (int planeIndex = 0; planeIndex < unityPlanes.Length; ++planeIndex)
+			foreach (Triangle triangle in slice.Mesh.Triangles)
 			{
-				planes[planeIndex] = new Plane(unityPlanes[planeIndex]);
-			}
-
-			return planes;
-		}
-
-		private static bool IsOneOfThemTriangles(Triangle t)
-		{
-			return (t.I0 == 4050 && t.I1 == 4215 && t.I2 == 3691)
-				|| (t.I0 == 2558 && t.I1 == 4217 && t.I2 == 3687)
-				|| (t.I0 == 2558 && t.I1 == 4053 && t.I2 == 4217)
-				|| (t.I0 == 3724 && t.I1 == 4221 && t.I2 == 4219)
-				|| (t.I0 == 4222 && t.I1 == 3729 && t.I2 == 4224);
-		}
-
-		private static void DisplayProblemTriangle(Triangle t, MeshData meshData, string function)
-		{
-			Debug.LogWarning($"Found triangle {t} in {function}");
-
-			GameObject triangle = new GameObject("Triangle");
-			triangle.transform.position = (meshData.Vertices[t.I0] + meshData.Vertices[t.I1] + meshData.Vertices[t.I2]) / 3;
-			Color c = Random.ColorHSV();
-
-			for (int i = 0; i < 3; ++i)
-			{
-				GameObject obj = GameObject.CreatePrimitive(PrimitiveType.Sphere);
-				obj.transform.name = $"Vertex {t[i]}";
-				obj.transform.parent = triangle.transform;
-				obj.transform.position = meshData.Vertices[t[i]];
-				obj.transform.localScale = new Vector3(0.001f, 0.001f, 0.001f);
-				obj.GetComponent<Renderer>().material.color = c;
-			}
-		}
-
-		private static bool SliceTriangleAndAddToMeshData(MeshData meshData, int triangleIndex, Plane plane,
-			DuplicateIndices duplicateIndices)
-		{
-			Triangle triangle = meshData.Triangles[triangleIndex];
-			Vertex v0 = meshData.GetVertexAt(triangle.I0);
-			Vertex v1 = meshData.GetVertexAt(triangle.I1);
-			Vertex v2 = meshData.GetVertexAt(triangle.I2);
-
-			v0.PlaneSide = plane.GetSide(v0.Position);
-			v1.PlaneSide = plane.GetSide(v1.Position);
-			v2.PlaneSide = plane.GetSide(v2.Position);
-
-			if (!IsTriangleIntersectingPlane(v0.PlaneSide, v1.PlaneSide, v2.PlaneSide))
-			{
-				return false;
-			}
-
-			if (IsOnePointOnPlaneAndOthersOnSameSide(v0.PlaneSide, v1.PlaneSide, v2.PlaneSide))
-			{
-				DuplicateVertexOnPlaneAndAddTriangleToMeshData(
-					meshData, v0, v1, v2, duplicateIndices
+				SlicerTriangleWrapper triangleWrapper = new SlicerTriangleWrapper(
+					triangle,
+					slice.Mesh.Vertices[triangle.I0],
+					slice.Mesh.Vertices[triangle.I1],
+					slice.Mesh.Vertices[triangle.I2],
+					cuttingPlane.GetSide(slice.Mesh.Vertices[triangle.I0].Position),
+					cuttingPlane.GetSide(slice.Mesh.Vertices[triangle.I1].Position),
+					cuttingPlane.GetSide(slice.Mesh.Vertices[triangle.I2].Position)
 				);
+
+				if (!IsTriangleIntersectingPlane(triangleWrapper.S0, triangleWrapper.S1, triangleWrapper.S2))
+				{
+					AddTriangleToSliceWhenAllVerticesAreOnSameSide(twoSliceWrappers, triangleWrapper);
+				}
+				else if (IsOnePointOnPlaneAndOthersOnSameSide(triangleWrapper.S0, triangleWrapper.S1, triangleWrapper.S2))
+				{
+					AddTriangleToSliceWhenOneVertexIsOnPlane(twoSliceWrappers, triangleWrapper);
+				}
+				else if (IsOneEdgeOnToPlane(triangleWrapper.S0, triangleWrapper.S1, triangleWrapper.S2))
+				{
+					AddTriangleToSliceWhenTwoVerticesAreOnPlane(twoSliceWrappers, triangleWrapper);
+				}
+				else if (IsOnePointOnPlaneAndOthersOnDifferentSides(triangleWrapper.S0, triangleWrapper.S1, triangleWrapper.S2))
+				{
+					SliceTriangleWithOneVertexOnPlane(twoSliceWrappers, triangleWrapper, cuttingPlane);
+				}
+				else // Plane intersects triangle and none of the points are on the plane
+				{
+					SliceTriangleWithNoVertexOnPlane(twoSliceWrappers, triangleWrapper, cuttingPlane);
+				}
 			}
-			else if (IsOneEdgeOnToPlane(v0.PlaneSide, v1.PlaneSide, v2.PlaneSide))
-			{
-				DuplicateLineVerticesOnPlaneAndAddTriangleToMeshData(
-					meshData, v0, v1, v2, duplicateIndices
-				);
-			}
-			else if (IsOnePointOnPlaneAndOthersOnDifferentSides(v0.PlaneSide, v1.PlaneSide, v2.PlaneSide))
-			{
-				CutTriangleInTwoTrianglesWherePlaneIntersectsAndAddThemToMeshData(
-					meshData, v0, v1, v2, duplicateIndices, plane
-				);
-			}
-			else // All points ore not on the plane
-			{
-				CutTriangleInThreeTrianglesWherePlaneIntersetsAndAddThemToMeshData(
-					meshData, v0, v1, v2, duplicateIndices, plane
-				);
-			}
-			return true;
+
+			return twoSliceWrappers;
 		}
 
 		private static bool IsTriangleIntersectingPlane(Plane.Side s0, Plane.Side s1, Plane.Side s2)
@@ -257,116 +151,104 @@ namespace PopcornGenerator.Slicer
 				|| (s0 != Plane.Side.on && s1 != Plane.Side.on && s2 == Plane.Side.on && s0 != s1);
 		}
 
-		private static void DuplicateVertexOnPlaneAndAddTriangleToMeshData(
-			MeshData meshData, Vertex v0, Vertex v1, Vertex v2, DuplicateIndices duplicateIndices
+		[MethodImpl(MethodImplOptions.AggressiveInlining)]
+		private static void AddTriangleToSliceWhenNoCutsAreMade(
+			TwoSliceBuildingsWrapper twoSliceWrappers, SlicerTriangleWrapper triangleWrapper,
+			Plane.Side sideNotOnPlane
 		)
 		{
-			//Debug.Log($"Slicing triangle {v0.TriangleIndex}, {v1.TriangleIndex}, {v2.TriangleIndex} in DuplicateVertexOnPlaneAndAddTriangleToMeshData");
-			Triangle triangle0 = new Triangle();
-			if (v0.PlaneSide == Plane.Side.on)
+			SliceBuildingWrapper wrapper = twoSliceWrappers.GetWrapperSameSide(sideNotOnPlane);
+			int i0 = wrapper.GetVertexIndex(triangleWrapper.I0, triangleWrapper.V0);
+			int i1 = wrapper.GetVertexIndex(triangleWrapper.I1, triangleWrapper.V1);
+			int i2 = wrapper.GetVertexIndex(triangleWrapper.I2, triangleWrapper.V2);
+
+			wrapper.Slice.Mesh.Triangles.Add(new Triangle(i0, i1, i2));
+		}
+
+		private static void AddTriangleToSliceWhenAllVerticesAreOnSameSide(
+			TwoSliceBuildingsWrapper twoSliceWrappers, SlicerTriangleWrapper triangleWrapper
+		)
+		{
+			AddTriangleToSliceWhenNoCutsAreMade(twoSliceWrappers, triangleWrapper, triangleWrapper.S0);
+		}
+
+		private static void AddTriangleToSliceWhenOneVertexIsOnPlane(
+			TwoSliceBuildingsWrapper twoSliceWrappers, SlicerTriangleWrapper triangleWrapper
+		)
+		{
+			if (triangleWrapper.S0 == Plane.Side.on)
 			{
 				//  v2 x-----x v1
 				//      \   /
 				//       \ /
 				// -------x------- Plane
 				//        v0
-				var indices = duplicateIndices.GetHullIndices(v1.PlaneSide).SameSide;
-				int v0CopyIndex = GetCopyOfVertexOrCreateDuplicate(meshData, indices, v0.TriangleIndex);
-				triangle0 = new Triangle(v0CopyIndex, v1.TriangleIndex, v2.TriangleIndex);
-				//Debug.Log($"Duplicated vertex {v0.TriangleIndex} -> {v0CopyIndex}");
+				AddTriangleToSliceWhenNoCutsAreMade(twoSliceWrappers, triangleWrapper, triangleWrapper.S1);
 			}
-			else if (v1.PlaneSide == Plane.Side.on)
+			else if (triangleWrapper.S1 == Plane.Side.on)
 			{
 				//  v0 x-----x v2
 				//      \   /
 				//       \ /
 				// -------x------- Plane
 				//        v1
-				var indices = duplicateIndices.GetHullIndices(v0.PlaneSide).SameSide;
-				int v1CopyIndex = GetCopyOfVertexOrCreateDuplicate(meshData, indices, v1.TriangleIndex);
-				triangle0 = new Triangle(v0.TriangleIndex, v1CopyIndex, v2.TriangleIndex);
-				//Debug.Log($"Duplicated vertex {v1.TriangleIndex} -> {v1CopyIndex}");
+				AddTriangleToSliceWhenNoCutsAreMade(twoSliceWrappers, triangleWrapper, triangleWrapper.S0);
 			}
-			else if (v2.PlaneSide == Plane.Side.on)
+			else if (triangleWrapper.S2 == Plane.Side.on)
 			{
 				//  v1 x-----x v0
 				//      \   /
 				//       \ /
 				// -------x------- Plane
 				//        v2
-				var indices = duplicateIndices.GetHullIndices(v0.PlaneSide).SameSide;
-				int v2CopyIndex = GetCopyOfVertexOrCreateDuplicate(meshData, indices, v2.TriangleIndex);
-				triangle0 = new Triangle(v0.TriangleIndex, v1.TriangleIndex, v2CopyIndex);
-				//Debug.Log($"Duplicated vertex {v2.TriangleIndex} -> {v2CopyIndex}");
+				AddTriangleToSliceWhenNoCutsAreMade(twoSliceWrappers, triangleWrapper, triangleWrapper.S0);
 			}
-			meshData.AddTriangle(triangle0);
-			//if (IsOneOfThemTriangles(triangle0)) DisplayProblemTriangle(triangle0, meshData, "DuplicateVertexOnPlaneAndAddTriangleToMeshData");
 		}
 
-		private static void DuplicateLineVerticesOnPlaneAndAddTriangleToMeshData(
-			MeshData meshData, Vertex v0, Vertex v1, Vertex v2, DuplicateIndices duplicateIndices
+		private static void AddTriangleToSliceWhenTwoVerticesAreOnPlane(
+			TwoSliceBuildingsWrapper twoSliceWrappers, SlicerTriangleWrapper triangleWrapper
 		)
 		{
-			//Debug.Log($"Slicing triangle {v0.TriangleIndex}, {v1.TriangleIndex}, {v2.TriangleIndex} in DuplicateLineVerticesOnPlaneAndAddTriangleToMeshData");
-			Triangle triangle0 = new Triangle();
-			if (v0.PlaneSide == Plane.Side.on && v1.PlaneSide == Plane.Side.on)
+			if (triangleWrapper.S0 == Plane.Side.on && triangleWrapper.S1 == Plane.Side.on)
 			{
 				//        x v2
 				//       / \
 				//      /   \
 				// ----x-----x---- Plane
 				//     v0    v1
-				var indices = duplicateIndices.GetHullIndices(v2.PlaneSide).SameSide;
-				int v0CopyIndex = GetCopyOfVertexOrCreateDuplicate(meshData, indices, v0.TriangleIndex);
-				int v1CopyIndex = GetCopyOfVertexOrCreateDuplicate(meshData, indices, v1.TriangleIndex);
-
-				triangle0 = new Triangle(v0CopyIndex, v1CopyIndex, v2.TriangleIndex);
-				//Debug.Log($"Duplicated vertex {v0.TriangleIndex} -> {v0CopyIndex}");
-				//Debug.Log($"Duplicated vertex {v1.TriangleIndex} -> {v1CopyIndex}");
+				AddTriangleToSliceWhenNoCutsAreMade(twoSliceWrappers, triangleWrapper, triangleWrapper.S2);
 			}
-			else if (v0.PlaneSide == Plane.Side.on && v2.PlaneSide == Plane.Side.on)
+			else if (triangleWrapper.S0 == Plane.Side.on && triangleWrapper.S2 == Plane.Side.on)
 			{
 				//        x v1
 				//       / \
 				//      /   \
 				// ----x-----x---- Plane
 				//     v2    v0
-				var indices = duplicateIndices.GetHullIndices(v1.PlaneSide).SameSide;
-				int v0CopyIndex = GetCopyOfVertexOrCreateDuplicate(meshData, indices, v0.TriangleIndex);
-				int v2CopyIndex = GetCopyOfVertexOrCreateDuplicate(meshData, indices, v2.TriangleIndex);
-
-				triangle0 = new Triangle(v0CopyIndex, v1.TriangleIndex, v2CopyIndex);
-				//Debug.Log($"Duplicated vertex {v0.TriangleIndex} -> {v0CopyIndex}");
-				//Debug.Log($"Duplicated vertex {v2.TriangleIndex} -> {v2CopyIndex}");
+				AddTriangleToSliceWhenNoCutsAreMade(twoSliceWrappers, triangleWrapper, triangleWrapper.S1);
 			}
-			else if (v1.PlaneSide == Plane.Side.on && v2.PlaneSide == Plane.Side.on)
+			else if (triangleWrapper.S1 == Plane.Side.on && triangleWrapper.S2 == Plane.Side.on)
 			{
 				//        x v0
 				//       / \
 				//      /   \
 				// ----x-----x---- Plane
 				//     v1    v2
-				var indices = duplicateIndices.GetHullIndices(v0.PlaneSide).SameSide;
-				int v1CopyIndex = GetCopyOfVertexOrCreateDuplicate(meshData, indices, v1.TriangleIndex);
-				int v2CopyIndex = GetCopyOfVertexOrCreateDuplicate(meshData, indices, v2.TriangleIndex);
-
-				triangle0 = new Triangle(v0.TriangleIndex, v1CopyIndex, v2CopyIndex);
-				//Debug.Log($"Duplicated vertex {v1.TriangleIndex} -> {v1CopyIndex}");
-				//Debug.Log($"Duplicated vertex {v2.TriangleIndex} -> {v2CopyIndex}");
+				AddTriangleToSliceWhenNoCutsAreMade(twoSliceWrappers, triangleWrapper, triangleWrapper.S0);
 			}
-			meshData.AddTriangle(triangle0);
-			//if (IsOneOfThemTriangles(triangle0)) DisplayProblemTriangle(triangle0, meshData, "DuplicateLineVerticesOnPlaneAndAddTriangleToMeshData");
 		}
 
-		private static void CutTriangleInTwoTrianglesWherePlaneIntersectsAndAddThemToMeshData(
-			MeshData meshData, Vertex v0, Vertex v1, Vertex v2, DuplicateIndices duplicateIndices, Plane plane
+		// I am not going to make this part any pretty. I have no idea why those indices have to
+		// be in those specific orders. I found them empirically. Some go clockwise, some don't.
+		// It's all a mess, I don't know why and I don't want to know why. I will leave them as
+		// they are. If you have a working fix, hit me with the DMs.
+		private static void SliceTriangleWithOneVertexOnPlane(
+			TwoSliceBuildingsWrapper twoSliceWrappers, SlicerTriangleWrapper triangleWrapper, Plane cuttingPlane
 		)
 		{
-			//Debug.Log($"Slicing triangle {v0.TriangleIndex}, {v1.TriangleIndex}, {v2.TriangleIndex} in CutTriangleInTwoTrianglesWherePlaneIntersectsAndAddThemToMeshData");
-			Triangle triangle0 = new Triangle();
-			Triangle triangle1 = new Triangle();
 			float t;
-			if (v0.PlaneSide == Plane.Side.on && plane.Raycast(v1.Position, v2.Position, out t))
+			if (triangleWrapper.S0 == Plane.Side.on
+				&& cuttingPlane.Raycast(triangleWrapper.V1.Position, triangleWrapper.V2.Position, out t))
 			{
 				//        x v2
 				//       /|
@@ -375,26 +257,23 @@ namespace PopcornGenerator.Slicer
 				//      \ |
 				//       \|
 				//        x v1
-				var sideOfV1Indices = duplicateIndices.GetHullIndices(v1.PlaneSide);
+				Vertex v12 = Vertex.Lerp(triangleWrapper.V1, triangleWrapper.V2, t);
+				SliceBuildingWrapper wrapperSideOfV1 = twoSliceWrappers.GetWrapperSameSide(triangleWrapper.S1);
+				SliceBuildingWrapper wrapperSideOfV2 = twoSliceWrappers.GetWrapperSameSide(triangleWrapper.S2);
 
-				int v0CopyIndexSameSideAsV1 = GetCopyOfVertexOrCreateDuplicate(
-					meshData, sideOfV1Indices.SameSide, v0.TriangleIndex
-				);
-				int v0CopyIndexOtherSideAsV1 = GetCopyOfVertexOrCreateDuplicate(
-					meshData, sideOfV1Indices.OtherSide, v0.TriangleIndex
-				);
+				int i0SideOfV1 = wrapperSideOfV1.GetVertexIndex(triangleWrapper.I0, triangleWrapper.V0);
+				int i12SideOfV1 = wrapperSideOfV1.GetInterpolatedVertexIndex(triangleWrapper.I1, triangleWrapper.I2, v12);
+				int i1SideOfV1 = wrapperSideOfV1.GetVertexIndex(triangleWrapper.I1, triangleWrapper.V1);
 
-				int v12IndexSameSideOfV1 = GetCopyOfInterpolatedVertexOrCreateDuplicate(
-					meshData, sideOfV1Indices.SameSide, v1.TriangleIndex, v2.TriangleIndex, t
-				);
-				int v12OIndextherSideOfV1 = GetCopyOfInterpolatedVertexOrCreateDuplicate(
-					meshData, sideOfV1Indices.OtherSide, v1.TriangleIndex, v2.TriangleIndex, t
-				);
+				int i0SideOfV2 = wrapperSideOfV2.GetVertexIndex(triangleWrapper.I0, triangleWrapper.V0);
+				int i12SideOfV2 = wrapperSideOfV2.GetInterpolatedVertexIndex(triangleWrapper.I1, triangleWrapper.I2, v12);
+				int i2SideOfV2 = wrapperSideOfV2.GetVertexIndex(triangleWrapper.I2, triangleWrapper.V2);
 
-				triangle0 = new Triangle(v0CopyIndexSameSideAsV1, v1.TriangleIndex, v12IndexSameSideOfV1);
-				triangle1 = new Triangle(v0CopyIndexOtherSideAsV1, v12OIndextherSideOfV1, v2.TriangleIndex);
+				wrapperSideOfV2.Slice.Mesh.Triangles.Add(new Triangle(i0SideOfV2, i12SideOfV2, i2SideOfV2));
+				wrapperSideOfV1.Slice.Mesh.Triangles.Add(new Triangle(i1SideOfV1, i12SideOfV1, i0SideOfV1));
 			}
-			else if (v1.PlaneSide == Plane.Side.on && plane.Raycast(v0.Position, v2.Position, out t))
+			else if (triangleWrapper.S1 == Plane.Side.on
+				&& cuttingPlane.Raycast(triangleWrapper.V0.Position, triangleWrapper.V2.Position, out t))
 			{
 				//        x v0
 				//       /|
@@ -403,26 +282,23 @@ namespace PopcornGenerator.Slicer
 				//      \ |
 				//       \|
 				//        x v2
-				var sideOfV0Indices = duplicateIndices.GetHullIndices(v0.PlaneSide);
+				Vertex v02 = Vertex.Lerp(triangleWrapper.V0, triangleWrapper.V2, t);
+				SliceBuildingWrapper wrapperSideOfV0 = twoSliceWrappers.GetWrapperSameSide(triangleWrapper.S0);
+				SliceBuildingWrapper wrapperSideOfV2 = twoSliceWrappers.GetWrapperSameSide(triangleWrapper.S2);
 
-				int i1CopySameSideP0 = GetCopyOfVertexOrCreateDuplicate(
-					meshData, sideOfV0Indices.SameSide, v1.TriangleIndex
-				);
-				int i1CopyOtherSideP0 = GetCopyOfVertexOrCreateDuplicate(
-					meshData, sideOfV0Indices.OtherSide, v1.TriangleIndex
-				);
+				int i1SideOfV0 = wrapperSideOfV0.GetVertexIndex(triangleWrapper.I1, triangleWrapper.V1);
+				int i02SideOfV0 = wrapperSideOfV0.GetInterpolatedVertexIndex(triangleWrapper.I0, triangleWrapper.I2, v02);
+				int i0SideOfV0 = wrapperSideOfV0.GetVertexIndex(triangleWrapper.I0, triangleWrapper.V0);
 
-				int i02SameSideP0 = GetCopyOfInterpolatedVertexOrCreateDuplicate(
-					meshData, sideOfV0Indices.SameSide, v0.TriangleIndex, v2.TriangleIndex, t
-				);
-				int i02OtherSideP0 = GetCopyOfInterpolatedVertexOrCreateDuplicate(
-					meshData, sideOfV0Indices.OtherSide, v0.TriangleIndex, v2.TriangleIndex, t
-				);
+				int i1SideOfV2 = wrapperSideOfV2.GetVertexIndex(triangleWrapper.I1, triangleWrapper.V1);
+				int i02SideOfV2 = wrapperSideOfV2.GetInterpolatedVertexIndex(triangleWrapper.I0, triangleWrapper.I2, v02);
+				int i2SideOfV2 = wrapperSideOfV2.GetVertexIndex(triangleWrapper.I2, triangleWrapper.V2);
 
-				triangle0 = new Triangle(v0.TriangleIndex, i1CopySameSideP0, i02SameSideP0);
-				triangle1 = new Triangle(i1CopyOtherSideP0, i02OtherSideP0, v2.TriangleIndex);
+				wrapperSideOfV0.Slice.Mesh.Triangles.Add(new Triangle(i1SideOfV0, i02SideOfV0, i0SideOfV0));
+				wrapperSideOfV2.Slice.Mesh.Triangles.Add(new Triangle(i1SideOfV2, i02SideOfV2, i2SideOfV2));
 			}
-			else if (v2.PlaneSide  == Plane.Side.on && plane.Raycast(v0.Position, v1.Position, out t))
+			else if (triangleWrapper.S2 == Plane.Side.on
+				&& cuttingPlane.Raycast(triangleWrapper.V0.Position, triangleWrapper.V1.Position, out t))
 			{
 				//        x v1
 				//       /|
@@ -431,54 +307,39 @@ namespace PopcornGenerator.Slicer
 				//      \ |
 				//       \|
 				//        x v0
-				var sideOfV0Indices = duplicateIndices.GetHullIndices(v0.PlaneSide);
+				Vertex v01 = Vertex.Lerp(triangleWrapper.V0, triangleWrapper.V1, t);
+				SliceBuildingWrapper wrapperSideOfV0 = twoSliceWrappers.GetWrapperSameSide(triangleWrapper.S0);
+				SliceBuildingWrapper wrapperSideOfV1 = twoSliceWrappers.GetWrapperSameSide(triangleWrapper.S1);
 
-				int i2CopySameSideP0 = GetCopyOfVertexOrCreateDuplicate(
-					meshData, sideOfV0Indices.SameSide, v2.TriangleIndex
-				);
-				int i2CopyOtherSideP0 = GetCopyOfVertexOrCreateDuplicate(
-					meshData, sideOfV0Indices.OtherSide, v2.TriangleIndex
-				);
-				
-				int i01SameSideP0 = GetCopyOfInterpolatedVertexOrCreateDuplicate(
-					meshData, sideOfV0Indices.SameSide, v0.TriangleIndex, v1.TriangleIndex, t
-				);
-				int i01OtherSideP0 = GetCopyOfInterpolatedVertexOrCreateDuplicate(
-					meshData, sideOfV0Indices.OtherSide, v0.TriangleIndex, v1.TriangleIndex, t
-				);
+				int i2SideOfV0 = wrapperSideOfV0.GetVertexIndex(triangleWrapper.I2, triangleWrapper.V2);
+				int i01SideOfV0 = wrapperSideOfV0.GetInterpolatedVertexIndex(triangleWrapper.I0, triangleWrapper.I1, v01);
+				int i0SideOfV0 = wrapperSideOfV0.GetVertexIndex(triangleWrapper.I0, triangleWrapper.V0);
 
-				triangle0 = new Triangle(v0.TriangleIndex, i01SameSideP0, i2CopySameSideP0);
-				triangle1 = new Triangle(i01OtherSideP0, v1.TriangleIndex, i2CopyOtherSideP0);
+				int i2SideOfV1 = wrapperSideOfV1.GetVertexIndex(triangleWrapper.I2, triangleWrapper.V2);
+				int i01SideOfV1 = wrapperSideOfV1.GetInterpolatedVertexIndex(triangleWrapper.I0, triangleWrapper.I1, v01);
+				int i1SideOfV1 = wrapperSideOfV1.GetVertexIndex(triangleWrapper.I1, triangleWrapper.V1);
+
+				wrapperSideOfV1.Slice.Mesh.Triangles.Add(new Triangle(i1SideOfV1, i01SideOfV1, i2SideOfV1));
+				wrapperSideOfV0.Slice.Mesh.Triangles.Add(new Triangle(i0SideOfV0, i01SideOfV0, i2SideOfV0));
 			}
-			meshData.AddTriangle(triangle0);
-			meshData.AddTriangle(triangle1);
-
-			//if (IsOneOfThemTriangles(triangle0)) DisplayProblemTriangle(triangle0, meshData, "CutTriangleInTwoTrianglesWherePlaneIntersectsAndAddThemToMeshData");
-			//if (IsOneOfThemTriangles(triangle1)) DisplayProblemTriangle(triangle1, meshData, "CutTriangleInTwoTrianglesWherePlaneIntersectsAndAddThemToMeshData");
 		}
 
-		private static void CutTriangleInThreeTrianglesWherePlaneIntersetsAndAddThemToMeshData(
-			MeshData meshData, Vertex v0, Vertex v1, Vertex v2, DuplicateIndices duplicateIndices, Plane plane
+		private static void SliceTriangleWithNoVertexOnPlane(
+			TwoSliceBuildingsWrapper twoSliceWrappers, SlicerTriangleWrapper triangleWrapper, Plane cuttingPlane
 		)
 		{
-			//Debug.Log($"Slicing triangle {v0.TriangleIndex}, {v1.TriangleIndex}, {v2.TriangleIndex} in CutTriangleInThreeTrianglesWherePlaneIntersetsAndAddThemToMeshData");
-			float t, t1, t2;
-			Triangle triangle0 = new Triangle();
-			Triangle triangle1 = new Triangle();
-			Triangle triangle2 = new Triangle();
-
-			if (v0.PlaneSide != v1.PlaneSide && plane.Raycast(v0.Position, v1.Position, out t))
+			float t1, t2;
+			if (triangleWrapper.S0 != triangleWrapper.S1
+				&& cuttingPlane.Raycast(triangleWrapper.V0.Position, triangleWrapper.V1.Position, out t1))
 			{
-				var sideOfV1Indices = duplicateIndices.GetHullIndices(v1.PlaneSide);
+				Vertex v01 = Vertex.Lerp(triangleWrapper.V0, triangleWrapper.V1, t1);
+				SliceBuildingWrapper wrapperSideOfV1 = twoSliceWrappers.GetWrapperSameSide(triangleWrapper.S1);
 
-				int i01SameSideP1 = GetCopyOfInterpolatedVertexOrCreateDuplicate(
-					meshData, sideOfV1Indices.SameSide, v0.TriangleIndex, v1.TriangleIndex, t
-				);
-				int i01OtherSideP1 = GetCopyOfInterpolatedVertexOrCreateDuplicate(
-					meshData, sideOfV1Indices.OtherSide, v0.TriangleIndex, v1.TriangleIndex, t
-				);
+				int i01SideOfV1 = wrapperSideOfV1.GetInterpolatedVertexIndex(triangleWrapper.I0, triangleWrapper.I1, v01);
+				int i1SideOfV1 = wrapperSideOfV1.GetVertexIndex(triangleWrapper.I1, triangleWrapper.V1);
 
-				if (v0.PlaneSide == v2.PlaneSide && plane.Raycast(v1.Position, v2.Position, out t1))
+				if (triangleWrapper.S0 == triangleWrapper.S2
+					&& cuttingPlane.Raycast(triangleWrapper.V1.Position, triangleWrapper.V2.Position, out t2))
 				{
 					//        x v1
 					//   v12 / \ v01
@@ -486,17 +347,21 @@ namespace PopcornGenerator.Slicer
 					//     /     \
 					//    x-------x
 					//    v2      v0
-					int i12SameSideP1 = GetCopyOfInterpolatedVertexOrCreateDuplicate(
-						meshData, sideOfV1Indices.SameSide, v1.TriangleIndex, v2.TriangleIndex, t1
-					);
-					int i12OtherSideP1 = GetCopyOfInterpolatedVertexOrCreateDuplicate(
-						meshData, sideOfV1Indices.OtherSide, v1.TriangleIndex, v2.TriangleIndex, t1
-					);
-					triangle0 = new Triangle(i01SameSideP1, v1.TriangleIndex, i12SameSideP1);
-					triangle1 = new Triangle(v0.TriangleIndex, i01OtherSideP1, i12OtherSideP1);
-					triangle2 = new Triangle(v0.TriangleIndex, i12OtherSideP1, v2.TriangleIndex);
+					Vertex v12 = Vertex.Lerp(triangleWrapper.V1, triangleWrapper.V2, t2);
+					int i12SideOfV1 = wrapperSideOfV1.GetInterpolatedVertexIndex(triangleWrapper.I1, triangleWrapper.I2, v12);
+
+					SliceBuildingWrapper wrapperSideOfV2 = twoSliceWrappers.GetWrapperSameSide(triangleWrapper.S2);
+
+					int i0SideOfV2 = wrapperSideOfV2.GetVertexIndex(triangleWrapper.I0, triangleWrapper.V0);
+					int i01SideOfV2 = wrapperSideOfV2.GetInterpolatedVertexIndex(triangleWrapper.I0, triangleWrapper.I1, v01);
+					int i12SideOfV2 = wrapperSideOfV2.GetInterpolatedVertexIndex(triangleWrapper.I1, triangleWrapper.I2, v12);
+					int i2SideOfV2 = wrapperSideOfV2.GetVertexIndex(triangleWrapper.I2, triangleWrapper.V2);
+
+					wrapperSideOfV1.Slice.Mesh.Triangles.Add(new Triangle(i12SideOfV1, i01SideOfV1, i1SideOfV1));
+					wrapperSideOfV2.Slice.Mesh.Triangles.Add(new Triangle(i0SideOfV2, i01SideOfV2, i12SideOfV2));
+					wrapperSideOfV2.Slice.Mesh.Triangles.Add(new Triangle(i0SideOfV2, i12SideOfV2, i2SideOfV2));
 				}
-				else if (plane.Raycast(v0.Position, v2.Position, out t1))
+				else if (cuttingPlane.Raycast(triangleWrapper.V0.Position, triangleWrapper.V2.Position, out t2))
 				{
 					//        x v0
 					//   v01 / \ v02
@@ -504,18 +369,23 @@ namespace PopcornGenerator.Slicer
 					//     /     \
 					//    x-------x
 					//    v1      v2
-					int i02SameSideP1 = GetCopyOfInterpolatedVertexOrCreateDuplicate(
-						meshData, sideOfV1Indices.SameSide, v0.TriangleIndex, v2.TriangleIndex, t1
-					);
-					int i02OtherSideP1 = GetCopyOfInterpolatedVertexOrCreateDuplicate(
-						meshData, sideOfV1Indices.OtherSide, v0.TriangleIndex, v2.TriangleIndex, t1
-					);
-					triangle0 = new Triangle(v0.TriangleIndex, i01OtherSideP1, i02OtherSideP1);
-					triangle1 = new Triangle(i02SameSideP1, i01SameSideP1, v2.TriangleIndex);
-					triangle2 = new Triangle(i01SameSideP1, v1.TriangleIndex, v2.TriangleIndex);
+					Vertex v02 = Vertex.Lerp(triangleWrapper.V0, triangleWrapper.V2, t2);
+					int i02SideOfV1 = wrapperSideOfV1.GetInterpolatedVertexIndex(triangleWrapper.I0, triangleWrapper.I2, v02);
+					int i2SideOfV1 = wrapperSideOfV1.GetVertexIndex(triangleWrapper.I2, triangleWrapper.V2);
+
+					SliceBuildingWrapper wrapperSideOfV0 = twoSliceWrappers.GetWrapperSameSide(triangleWrapper.S0);
+
+					int i01SideOfV0 = wrapperSideOfV0.GetInterpolatedVertexIndex(triangleWrapper.I0, triangleWrapper.I1, v01);
+					int i02SideOfV0 = wrapperSideOfV0.GetInterpolatedVertexIndex(triangleWrapper.I0, triangleWrapper.I2, v02);
+					int i0SideOfV0 = wrapperSideOfV0.GetVertexIndex(triangleWrapper.I0, triangleWrapper.V0);
+
+					wrapperSideOfV0.Slice.Mesh.Triangles.Add(new Triangle(i0SideOfV0, i01SideOfV0, i02SideOfV0));
+					wrapperSideOfV1.Slice.Mesh.Triangles.Add(new Triangle(i02SideOfV1, i01SideOfV1, i2SideOfV1));
+					wrapperSideOfV1.Slice.Mesh.Triangles.Add(new Triangle(i01SideOfV1, i1SideOfV1, i2SideOfV1));
 				}
 			}
-			else if (plane.Raycast(v2.Position, v0.Position, out t1) && plane.Raycast(v2.Position, v1.Position, out t2))
+			else if (cuttingPlane.Raycast(triangleWrapper.V2.Position, triangleWrapper.V0.Position, out t1)
+				&& cuttingPlane.Raycast(triangleWrapper.V2.Position, triangleWrapper.V1.Position, out t2))
 			{
 				//        x v2
 				//   v20 / \ v21
@@ -523,193 +393,24 @@ namespace PopcornGenerator.Slicer
 				//     /     \
 				//    x-------x
 				//    v0      v1
-				var sideOfV2Indices = duplicateIndices.GetHullIndices(v2.PlaneSide);
+				Vertex v20 = Vertex.Lerp(triangleWrapper.V2, triangleWrapper.V0, t1);
+				Vertex v21 = Vertex.Lerp(triangleWrapper.V2, triangleWrapper.V1, t2);
 
-				int i20SameSideP2 = GetCopyOfInterpolatedVertexOrCreateDuplicate(
-					meshData, sideOfV2Indices.SameSide, v2.TriangleIndex, v0.TriangleIndex, t1
-				);
-				int i20OtherSideP2 = GetCopyOfInterpolatedVertexOrCreateDuplicate(
-					meshData, sideOfV2Indices.OtherSide, v2.TriangleIndex, v0.TriangleIndex, t1
-				);
+				SliceBuildingWrapper wrapperSideOfV2 = twoSliceWrappers.GetWrapperSameSide(triangleWrapper.S2);
+				SliceBuildingWrapper wrapperSideOfV0 = twoSliceWrappers.GetWrapperSameSide(triangleWrapper.S0);
 
-				int i21SameSideP2 = GetCopyOfInterpolatedVertexOrCreateDuplicate(
-					meshData, sideOfV2Indices.SameSide, v2.TriangleIndex, v1.TriangleIndex, t2
-				);
-				int i21OtherSideP2 = GetCopyOfInterpolatedVertexOrCreateDuplicate(
-					meshData, sideOfV2Indices.OtherSide, v2.TriangleIndex, v1.TriangleIndex, t2
-				);
-				triangle0 = new Triangle(i20SameSideP2, i21SameSideP2, v2.TriangleIndex);
-				triangle1 = new Triangle(v0.TriangleIndex, i21OtherSideP2, i20OtherSideP2);
-				triangle2 = new Triangle(v0.TriangleIndex, v1.TriangleIndex, i21OtherSideP2);
-			}
-			meshData.AddTriangle(triangle0);
-			meshData.AddTriangle(triangle1);
-			meshData.AddTriangle(triangle2);
+				int i2SideOfV2 = wrapperSideOfV2.GetVertexIndex(triangleWrapper.I2, triangleWrapper.V2);
+				int i20SideOfV2 = wrapperSideOfV2.GetInterpolatedVertexIndex(triangleWrapper.I2, triangleWrapper.I0, v20);
+				int i21SideOfV2 = wrapperSideOfV2.GetInterpolatedVertexIndex(triangleWrapper.I2, triangleWrapper.I1, v21);
 
-			//if (IsOneOfThemTriangles(triangle0)) DisplayProblemTriangle(triangle0, meshData, "CutTriangleInThreeTrianglesWherePlaneIntersetsAndAddThemToMeshData");
-			//if (IsOneOfThemTriangles(triangle1)) DisplayProblemTriangle(triangle1, meshData, "CutTriangleInThreeTrianglesWherePlaneIntersetsAndAddThemToMeshData");
-			//if (IsOneOfThemTriangles(triangle2)) DisplayProblemTriangle(triangle2, meshData, "CutTriangleInThreeTrianglesWherePlaneIntersetsAndAddThemToMeshData");
-		}
+				int i0SideOfV0 = wrapperSideOfV0.GetVertexIndex(triangleWrapper.I0, triangleWrapper.V0);
+				int i1SideOfV0 = wrapperSideOfV0.GetVertexIndex(triangleWrapper.I1, triangleWrapper.V1);
+				int i20SideOfV0 = wrapperSideOfV0.GetInterpolatedVertexIndex(triangleWrapper.I2, triangleWrapper.I0, v20);
+				int i21SideOfV0 = wrapperSideOfV0.GetInterpolatedVertexIndex(triangleWrapper.I2, triangleWrapper.I1, v21);
 
-		private static int AddCopyOfVertexToMeshDataAndGetIndex(MeshData meshData, Vertex v)
-		{
-			int index = meshData.Vertices.Count;
-			// Since Vertex is a struct and structs are passed by value, we do
-			// not need to make an explicit copy of the vertex since it is
-			// already a copy of the original
-			meshData.AddVertex(v);
-			return index;
-		}
-
-		private static int GetCopyOfVertexOrCreateDuplicate(MeshData meshData,
-			IDictionary<IndicesPair, int> zoneDuplicateIndices, int index
-		)
-		{
-			int indexCopy;
-			IndicesPair pair = new IndicesPair(index, index);
-
-			if (!zoneDuplicateIndices.TryGetValue(pair, out indexCopy))
-			{
-				indexCopy = AddCopyOfVertexToMeshDataAndGetIndex(meshData, meshData.GetVertexAt(index));
-				zoneDuplicateIndices.Add(pair, indexCopy);
-			}
-			return indexCopy;
-		}
-
-		private static int GetCopyOfInterpolatedVertexOrCreateDuplicate(MeshData meshData,
-			IDictionary<IndicesPair, int> zoneDuplicateIndices, int index0, int index1, float t)
-		{
-			int indexCopy;
-			IndicesPair pair = new IndicesPair(index0, index1);
-			IndicesPair reversedPair = new IndicesPair(index1, index0);
-
-			if (!(zoneDuplicateIndices.TryGetValue(pair, out indexCopy)
-				|| zoneDuplicateIndices.TryGetValue(reversedPair, out indexCopy)))
-			{
-				Vertex v0 = meshData.GetVertexAt(index0);
-				Vertex v1 = meshData.GetVertexAt(index1);
-
-				indexCopy = AddCopyOfVertexToMeshDataAndGetIndex(meshData, Vertex.Lerp(v0, v1, t));
-				zoneDuplicateIndices.Add(pair, indexCopy);
-			}
-			return indexCopy;
-		}
-
-		private static void GetSlicesAndAddThemToMeshData(MeshData meshData, Plane[] planes, IList<DuplicateIndices> duplicateIndices)
-		{
-			// Get the side for each vertex
-			Dictionary<int, Slice> slices = new Dictionary<int, Slice>();
-			//int[] sides = new int[meshData.Vertices.Count];
-			int sidesNum = -1;
-			for (int vertexIndex = 0; vertexIndex < meshData.Vertices.Count; ++vertexIndex)
-			{
-				int vertexSide = 0;
-				bool isOnBorder = false;
-				for (int planeIndex = 0; planeIndex < planes.Length; ++planeIndex)
-				{
-					Plane.Side side = planes[planeIndex].GetSide(meshData.Vertices[vertexIndex]);
-
-					switch (side)
-					{
-						case Plane.Side.up:
-							vertexSide |= 1 << planeIndex;
-							break;
-
-						case Plane.Side.down:
-							vertexSide &= ~(1 << planeIndex);
-							break;
-
-						case Plane.Side.on:
-							//foreach (DuplicateIndices di in duplicateIndices)
-							{
-								if (duplicateIndices[planeIndex].UpperHullIndices.Contains(vertexIndex))
-								{
-									vertexSide |= 1 << planeIndex;
-									isOnBorder = true;
-									//break;
-								}
-								if (duplicateIndices[planeIndex].LowerHullIndices.Contains(vertexIndex))
-								{
-									vertexSide &= ~(1 << planeIndex);
-									isOnBorder = true;
-									//break;
-								}
-							}
-							break;
-					}
-				}
-				sidesNum = Mathf.Max(sidesNum, vertexSide);
-				//sides[vertexIndex] = vertexSide;
-				Slice slice = null;
-				if (!slices.TryGetValue(vertexSide, out slice))
-				{
-					slice = new Slice(new SliceAllIndicesCollection(), new SliceBorderIndicesCollection());
-					slices.Add(vertexSide, slice);
-				}
-
-				slice.AllIndices.Add(vertexIndex);
-				if (isOnBorder)
-				{
-					slice.BorderIndices.Add(vertexIndex);
-				}
-			}
-
-			foreach (Slice slice in slices.Values)
-			{
-				meshData.Slices.Add(slice);
-			}
-
-			/*
-			++sidesNum;
-			Debug.Log($"Number of sides: {sidesNum}");
-
-			GameObject[] sidesObjects = new GameObject[sidesNum];
-			for (int i = 0; i < sidesNum; ++i)
-			{
-				sidesObjects[i] = new GameObject($"Side {i}");
-			}
-
-			Color[] colors = new Color[] { Color.red, Color.green, Color.blue, Color.magenta, Color.cyan };
-			for (int vertexIndex = 0; vertexIndex < meshData.Vertices.Count; ++vertexIndex)
-			{
-				GameObject obj = GameObject.CreatePrimitive(PrimitiveType.Sphere);
-				obj.transform.name = $"Vertex {vertexIndex} Side {sides[vertexIndex]}";
-				obj.transform.parent = sidesObjects[sides[vertexIndex]].transform;
-				obj.transform.position = meshData.Vertices[vertexIndex];
-				obj.transform.localScale = new Vector3(0.008f, 0.008f, 0.008f);
-				obj.GetComponent<Renderer>().material.color = colors[sides[vertexIndex]];
-			}
-			*/
-		}
-
-		private static void RemoveTrianglesWithIndicesInDifferentSlices(MeshData meshData)
-		{
-			int[] verticesSlices = new int[meshData.Vertices.Count];
-			for (int vertexIndex = 0; vertexIndex < meshData.Vertices.Count; ++vertexIndex)
-			{
-				verticesSlices[vertexIndex] = -1;
-				for (int sliceIndex = 0; sliceIndex < meshData.Slices.Count; ++sliceIndex)
-				{
-					if (meshData.Slices[sliceIndex].AllIndices.Contains(vertexIndex))
-					{
-						verticesSlices[vertexIndex] = sliceIndex;
-						break;
-					}
-				}
-			}
-
-			for (int triangleIndex = meshData.Triangles.Count - 1; triangleIndex >= 0; --triangleIndex)
-			{
-				Triangle t = meshData.Triangles[triangleIndex];
-				int ri0 = verticesSlices[t.I0];
-				int ri1 = verticesSlices[t.I1];
-				int ri2 = verticesSlices[t.I2];
-
-				if (ri0 != ri1 || ri0 != ri2 || ri1 != ri2)
-				{
-					Debug.Log($"Deleting triangle {t} in zones {ri0}. {ri1}, {ri2}");
-					meshData.Triangles.RemoveAt(triangleIndex);
-				}
+				wrapperSideOfV2.Slice.Mesh.Triangles.Add(new Triangle(i20SideOfV2, i21SideOfV2, i2SideOfV2));
+				wrapperSideOfV0.Slice.Mesh.Triangles.Add(new Triangle(i0SideOfV0, i21SideOfV0, i20SideOfV0));
+				wrapperSideOfV0.Slice.Mesh.Triangles.Add(new Triangle(i0SideOfV0, i1SideOfV0, i21SideOfV0));
 			}
 		}
 	}

@@ -1,13 +1,13 @@
 ﻿using UnityEngine;
 
-namespace PopcornGenerator.Slicer
+namespace PopcornGenerator
 {
 	internal struct Plane
 	{
 		public enum Side {up, down, on, none};
 
-		private Vector3 normal;
-		private float distance;
+		private readonly Vector3 normal;
+		private readonly float distance;
 
 		public Plane(UnityEngine.Plane plane)
 		{
@@ -31,12 +31,12 @@ namespace PopcornGenerator.Slicer
 		{
 			float result = Vector3.Dot(normal, point) - distance;
 
-			if (result > Constants.Epsilon)
+			if (result > Constants.PlaneEpsilon)
 			{
 				return Side.up;
 			}
 
-			if (result < -Constants.Epsilon)
+			if (result < -Constants.PlaneEpsilon)
 			{
 				return Side.down;
 			}
@@ -49,7 +49,7 @@ namespace PopcornGenerator.Slicer
 			Vector3 p0p1 = p1 - p0;
 			t = (distance - Vector3.Dot(normal, p0)) / Vector3.Dot(normal, p0p1);
 
-			if (Constants.Epsilon <= t && t <= 1.0f - Constants.Epsilon)
+			if (Constants.PlaneEpsilon <= t && t <= 1.0f - Constants.PlaneEpsilon)
 			{
 				return true;
             }

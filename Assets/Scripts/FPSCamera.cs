@@ -15,11 +15,7 @@ public class FPSCamera : MonoBehaviour
 	private float pitch = 0.0f;
 	private float yaw = 0.0f;
 	private bool wasPrevRotating = false;
-
-	private void Start()
-	{
-		
-	}
+	private bool isNowRotating = false;
 
 	private void Update()
 	{
@@ -41,20 +37,17 @@ public class FPSCamera : MonoBehaviour
 
 	private void UpdateRotation()
 	{
-		bool isNowRotating = Input.GetButton(Constants.CameraMovementKey);
+		wasPrevRotating = isNowRotating;
+		isNowRotating = Input.GetButton(Constants.CameraMovementKey);
 
 		if (!wasPrevRotating && isNowRotating)
 		{
-			//print($"Cursor is now hidden");
 			Cursor.visible = false;
 		}
 		else if (wasPrevRotating && !isNowRotating)
 		{
-			//print($"Cursor is now visible");
 			Cursor.visible = true;
 		}
-
-		wasPrevRotating = isNowRotating;
 
 		if (!isNowRotating)
 		{
