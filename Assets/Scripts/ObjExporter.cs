@@ -3,7 +3,7 @@ using System.IO;
 using System.Text;
 
 // https://wiki.unity3d.com/index.php?title=ExportOBJ
-public class ObjExporter
+public static class ObjExporter
 {
 	public static void WriteMesh(GameObject gameObject, string path)
 	{

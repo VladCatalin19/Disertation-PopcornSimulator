@@ -61,6 +61,13 @@ namespace PopcornGenerator
 
 		private static void SetMeshesBorderIndices(IList<Slice> resultingSlices, IList<Plane> cuttingPlanes)
 		{
+			// TODO Find a way to get 'intersecting' indices when we get only one cutting plane
+			if (cuttingPlanes.Count == 1)
+			{
+				Debug.LogWarning("Slicer -> SetMeshesBorderIndices: " +
+					"Number of cutting planes is 1. Will not set intersecting planes indices");
+			}
+
 			for (int sliceIndex = 0; sliceIndex < resultingSlices.Count; ++sliceIndex)
 			{
 				Slice slice = resultingSlices[sliceIndex];
@@ -68,13 +75,21 @@ namespace PopcornGenerator
 				for (int vertexIndex = 0; vertexIndex < vertices.Count; ++vertexIndex)
 				{
 					Vertex vertex = vertices[vertexIndex];
+					int numOfPlanesTheVertexIsOn = 0;
 					for (int planeIndex = 0; planeIndex < cuttingPlanes.Count; ++planeIndex)
 					{
 						if (cuttingPlanes[planeIndex].GetSide(vertex.Position) == Plane.Side.on)
 						{
-							slice.AddBorderIndex(vertexIndex);
-							break;
+							if (++numOfPlanesTheVertexIsOn == 1)
+							{
+								slice.Border.AddIndex(vertexIndex);
+							}
 						}
+					}
+
+					if (cuttingPlanes.Count > 1 && numOfPlanesTheVertexIsOn == cuttingPlanes.Count)
+					{
+						slice.Border.AddIntersectingPlanesIndex(vertexIndex);
 					}
 				}
 			}
@@ -125,11 +140,13 @@ namespace PopcornGenerator
 			return twoSliceWrappers;
 		}
 
+		[MethodImpl(MethodImplOptions.AggressiveInlining)]
 		private static bool IsTriangleIntersectingPlane(Plane.Side s0, Plane.Side s1, Plane.Side s2)
 		{
 			return !(s0 == s1 && s0 == s2);
 		}
 
+		[MethodImpl(MethodImplOptions.AggressiveInlining)]
 		private static bool IsOneEdgeOnToPlane(Plane.Side s0, Plane.Side s1, Plane.Side s2)
 		{
 			return (s0 == Plane.Side.on && s1 == Plane.Side.on)
@@ -137,6 +154,7 @@ namespace PopcornGenerator
 				|| (s1 == Plane.Side.on && s2 == Plane.Side.on);
 		}
 
+		[MethodImpl(MethodImplOptions.AggressiveInlining)]
 		private static bool IsOnePointOnPlaneAndOthersOnSameSide(Plane.Side s0, Plane.Side s1, Plane.Side s2)
 		{
 			return (s0 == Plane.Side.on && s1 != Plane.Side.on && s1 == s2)
@@ -144,6 +162,7 @@ namespace PopcornGenerator
 				|| (s2 == Plane.Side.on && s0 != Plane.Side.on && s0 == s1);
 		}
 
+		[MethodImpl(MethodImplOptions.AggressiveInlining)]
 		private static bool IsOnePointOnPlaneAndOthersOnDifferentSides(Plane.Side s0, Plane.Side s1, Plane.Side s2)
 		{
 			return (s0 == Plane.Side.on && s1 != Plane.Side.on && s2 != Plane.Side.on && s1 != s2)

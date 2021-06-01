@@ -24,5 +24,21 @@ namespace PopcornGenerator
 				vertices[vertexIndex] = vertex;
 			}
 		}
+
+		public static void TransformPositionsToWorldSpace(IList<Vector3> positions, Transform transform)
+		{
+			for (int positionIndex = 0; positionIndex < positions.Count; ++positionIndex)
+			{
+				positions[positionIndex] = transform.TransformPoint(positions[positionIndex]);
+			}
+		}
+
+		public static void TransformPositionsToLocalSpace(IList<Vector3> positions, Transform transform)
+		{
+			for (int positionIndex = 0; positionIndex < positions.Count; ++positionIndex)
+			{
+				positions[positionIndex] = transform.InverseTransformPoint(positions[positionIndex]);
+			}
+		}
 	}
 }
