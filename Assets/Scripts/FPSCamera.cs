@@ -17,6 +17,13 @@ public class FPSCamera : MonoBehaviour
 	private bool wasPrevRotating = false;
 	private bool isNowRotating = false;
 
+	private void Start()
+	{
+		Vector3 eulerAngles = transform.eulerAngles;
+		pitch = eulerAngles.x;
+		yaw = eulerAngles.y;
+	}
+
 	private void Update()
 	{
 		UpdateMovement();
@@ -30,7 +37,7 @@ public class FPSCamera : MonoBehaviour
 		float z = Input.GetAxis(Constants.VerticalAxis);
 
 		Vector3 direction = new Vector3(x, y, z);
-		float speed = Input.GetButtonDown(Constants.RunKey) ? runSpeed : moveSpeed;
+		float speed = Input.GetButton(Constants.RunKey) ? runSpeed : moveSpeed;
 
 		transform.Translate(direction * speed * Time.deltaTime);
 	}

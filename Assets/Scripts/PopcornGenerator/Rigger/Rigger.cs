@@ -82,10 +82,15 @@ namespace PopcornGenerator
 
 			// Create copy of vertices
 			IList<int> zoneIndices = riggedSlice.RiggingZonesIndices[zoneIndex];
-			Vector3[] vertices = new Vector3[zoneIndices.Count];
-			for (int vertexIndex = 0; vertexIndex < vertices.Length; ++vertexIndex)
+			IList<Vector3> vertices = new List<Vector3>(); //new Vector3[zoneIndices.Count];
+			for (int vertexIndex = 0; vertexIndex < zoneIndices.Count; ++vertexIndex)
 			{
-				vertices[vertexIndex] = meshVertices[zoneIndices[vertexIndex]].Position;
+				// TODO ignore puffed vertices because we set the uv coordinates to 0 when we create those
+				if (meshVertices[zoneIndices[vertexIndex]].UV.Value != Vector2.zero)
+				{
+					vertices.Add(meshVertices[zoneIndices[vertexIndex]].Position);
+				}
+				//vertices[vertexIndex] = meshVertices[zoneIndices[vertexIndex]].Position;
 			}
 
 			// Select triangle in zone
@@ -95,7 +100,12 @@ namespace PopcornGenerator
 			for (int triangleIndex = 0; triangleIndex < meshTriangles.Count; ++triangleIndex)
 			{
 				Triangle t = meshTriangles[triangleIndex];
-				if (indicesHashSet.Contains(t.I0) && indicesHashSet.Contains(t.I1) && indicesHashSet.Contains(t.I2))
+				if (indicesHashSet.Contains(t.I0) && indicesHashSet.Contains(t.I1) && indicesHashSet.Contains(t.I2)
+					// TODO ignore puffed vertices because we set the uv coordinates to 0 when we create those
+					&& meshVertices[t.I0].UV != Vector2.zero
+					&& meshVertices[t.I1].UV != Vector2.zero
+					&& meshVertices[t.I2].UV != Vector2.zero
+				)
 				{
 					triangles.Add(t);
 				}
@@ -103,11 +113,11 @@ namespace PopcornGenerator
 
 			// Calculate center of gravity
 			Vector3 center = Vector3.zero;
-			for (int vertexIndex = 0; vertexIndex < vertices.Length; ++vertexIndex)
+			for (int vertexIndex = 0; vertexIndex < vertices.Count; ++vertexIndex)
 			{
 				center += vertices[vertexIndex];
 			}
-			center /= vertices.Length;
+			center /= vertices.Count;
 
 			// Calculate mean normal
 			Vector3 meanNormal = Vector3.zero;
@@ -122,13 +132,13 @@ namespace PopcornGenerator
 			meanNormal /= triangles.Count;
 
 			// Translate vertices to origin
-			for (int vertexIndex = 0; vertexIndex < vertices.Length; ++vertexIndex)
+			for (int vertexIndex = 0; vertexIndex < vertices.Count; ++vertexIndex)
 			{
 				vertices[vertexIndex] -= center;
 			}
 
 			// Project vertices on plane
-			for (int vertexIndex = 0; vertexIndex < vertices.Length; ++vertexIndex)
+			for (int vertexIndex = 0; vertexIndex < vertices.Count; ++vertexIndex)
 			{
 				vertices[vertexIndex] = Vector3.ProjectOnPlane(vertices[vertexIndex], meanNormal);
 			}
@@ -137,14 +147,14 @@ namespace PopcornGenerator
 			Vector3 dir = Vector3.Angle(meanNormal, Vector3.forward) < Vector3.Angle(meanNormal, Vector3.back)
 				? Vector3.forward : Vector3.back;
 			Quaternion q = Quaternion.FromToRotation(meanNormal, dir);
-			for (int vertexIndex = 0; vertexIndex < vertices.Length; ++vertexIndex)
+			for (int vertexIndex = 0; vertexIndex < vertices.Count; ++vertexIndex)
 			{
 				vertices[vertexIndex] = q * vertices[vertexIndex];
 			}
 
 			// Calculate bounds
 			Bounds bounds = new Bounds();
-			for (int vertexIndex = 0; vertexIndex < vertices.Length; ++vertexIndex)
+			for (int vertexIndex = 0; vertexIndex < vertices.Count; ++vertexIndex)
 			{
 				bounds.Encapsulate(vertices[vertexIndex]);
 			}
@@ -158,7 +168,7 @@ namespace PopcornGenerator
 			// Find closest vertex to reference
 			float sqrMinDinst = float.MaxValue;
 			int closestVertexIndex = -1;
-			for (int vertexIndex = 0; vertexIndex < vertices.Length; ++vertexIndex)
+			for (int vertexIndex = 0; vertexIndex < vertices.Count; ++vertexIndex)
 			{
 				float sqrDist = (vertices[vertexIndex] - reference).sqrMagnitude;
 				if (sqrDist < sqrMinDinst)
@@ -212,11 +222,78 @@ namespace PopcornGenerator
 			{
 				foreach (int vertexIndex in riggedSlice.RiggingZonesIndices[riggingZoneIndex])
 				{
+					#if true
 					riggedSlice.BoneWeights[vertexIndex] = new BoneWeight()
 					{
 						boneIndex0 = riggingZoneIndex,
 						weight0 = 1.0f
 					};
+					#endif
+
+					#if false
+					Vector3 vertexPosition = riggedSlice.Slice.Mesh.Vertices[vertexIndex].Position;
+
+					// Find closest 4 bones
+					int[] minIndices = new int[4] { -1, -1, -1, -1};
+					float[] minSqrDist = new float[4] { float.MaxValue, float.MaxValue, float.MaxValue, float.MaxValue };
+
+					for (int boneIndex = 0; boneIndex < riggedSlice.BonePositions.Length; ++boneIndex)
+					{
+						Vector3 bonePosition = riggedSlice.BonePositions[boneIndex];
+						float sqrDist = (vertexPosition - bonePosition).sqrMagnitude;
+
+						if (sqrDist < minSqrDist[0])
+						{
+							minSqrDist[3] = minSqrDist[2];
+							minSqrDist[2] = minSqrDist[1];
+							minSqrDist[1] = minSqrDist[0];
+							minSqrDist[0] = sqrDist;
+
+							minIndices[3] = minIndices[2];
+							minIndices[2] = minIndices[1];
+							minIndices[1] = minIndices[0];
+							minIndices[0] = boneIndex;
+						}
+						else if (sqrDist < minSqrDist[1])
+						{
+							minSqrDist[3] = minSqrDist[2];
+							minSqrDist[2] = minSqrDist[1];
+							minSqrDist[1] = sqrDist;
+
+							minIndices[3] = minIndices[2];
+							minIndices[2] = minIndices[1];
+							minIndices[1] = boneIndex;
+						}
+						else if (sqrDist < minSqrDist[2])
+						{
+							minSqrDist[3] = minSqrDist[2];
+							minSqrDist[2] = sqrDist;
+
+							minIndices[3] = minIndices[2];
+							minIndices[2] = boneIndex;
+						}
+						else
+						{
+							minSqrDist[3] = sqrDist;
+
+							minIndices[3] = boneIndex;
+						}
+					}
+
+					float totalDist = minSqrDist[0] + minSqrDist[1] + minSqrDist[2] + minSqrDist[3];
+
+					riggedSlice.BoneWeights[vertexIndex] = new BoneWeight()
+					{
+						boneIndex0 = minIndices[0],
+						weight0 = 1.0f - minSqrDist[0] / totalDist,
+						boneIndex1 = minIndices[1],
+						weight1 = 1.0f - minSqrDist[1] / totalDist,
+						boneIndex2 = minIndices[2],
+						weight2 = 1.0f - minSqrDist[2] / totalDist,
+						boneIndex3 = minIndices[3],
+						weight3 = 1.0f - minSqrDist[3] / totalDist,
+					};
+					#endif
 				}
 			}
 		}

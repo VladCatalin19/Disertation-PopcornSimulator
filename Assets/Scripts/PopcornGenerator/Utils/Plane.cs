@@ -27,6 +27,9 @@ namespace PopcornGenerator
 			this.distance = Vector3.Dot(normal, position);
 		}
 
+		public Vector3 Normal { get => normal; }
+		public float Distance { get => distance; }
+
 		public Side GetSide(Vector3 point)
 		{
 			float result = Vector3.Dot(normal, point) - distance;

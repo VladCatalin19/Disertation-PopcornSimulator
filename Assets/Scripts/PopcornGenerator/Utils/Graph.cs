@@ -2,7 +2,7 @@
 
 namespace PopcornGenerator
 {
-	public class Graph<TVertex>
+	internal class Graph<TVertex>
 	{
 		private readonly IDictionary<TVertex, ICollection<TVertex>> graph;
 

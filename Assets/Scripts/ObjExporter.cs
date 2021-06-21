@@ -48,6 +48,7 @@ public static class ObjExporter
 			stringBuilder.Append($"vt {uv.x} {uv.y}\n");
 		}
 
+		#if false
 		for (int material = 0; material < mesh.subMeshCount; ++material)
 		{
 			stringBuilder.Append("\n");
@@ -63,6 +64,7 @@ public static class ObjExporter
 				stringBuilder.Append($"f {v0}/{v0}/{v0} {v1}/{v1}/{v1} {v2}/{v2}/{v2}\n");
 			}
 		}
+		#endif
 		return stringBuilder.ToString();
 	}
 }

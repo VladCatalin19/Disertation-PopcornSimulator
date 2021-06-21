@@ -5,6 +5,7 @@ using UnityEngine;
 namespace PopcornGenerator
 {
 	// TODO Bug: some triangles are flipped
+	// TODO Triangles in Unity are clockwise
 	internal static class Slicer
 	{
 		public static IList<Slice> SliceMesh(Mesh mesh, IList<Plane> cuttingPlanes)
@@ -29,9 +30,24 @@ namespace PopcornGenerator
 					TwoSliceBuildingsWrapper twoSlices = SliceSlice(
 						toCutSliceWrappers[toCutIndex].Slice, cuttingPlanes[planeIndex]
 					);
-					resultingSliceWrappers.Add(twoSlices.LowerSliceWrapper);
-					resultingSliceWrappers.Add(twoSlices.UpperSliceWrapper);
+
+					void AddIfNotNone(SliceBuildingWrapper sbw) { if (sbw.Slice.Mesh.Vertices.Count > 0) resultingSliceWrappers.Add(sbw); }
+					AddIfNotNone(twoSlices.LowerSliceWrapper);
+					AddIfNotNone(twoSlices.UpperSliceWrapper);
 				}
+
+				#if false
+				GameObject goP = new GameObject($"Plane{planeIndex}");
+				for (int resultIndex = 0; resultIndex < resultingSliceWrappers.Count; ++resultIndex)
+				{
+					GameObject go = new GameObject($"Slice{resultIndex}");
+					go.transform.parent = goP.transform;
+					go.AddComponent<MeshFilter>().mesh = resultingSliceWrappers[resultIndex].Slice.Mesh.ToUnityMesh();
+					go.AddComponent<MeshRenderer>().material = new Material(Shader.Find("Universal Render Pipeline/Lit"));
+
+					//ObjExporter.WriteMesh(go, $@"{System.IO.Directory.GetCurrentDirectory()}\RuntimeExports\Slices\{name}.obj");
+				}
+				#endif
 
 				if (planeIndex != cuttingPlanes.Count - 1)
 				{
@@ -115,7 +131,11 @@ namespace PopcornGenerator
 					cuttingPlane.GetSide(slice.Mesh.Vertices[triangle.I2].Position)
 				);
 
-				if (!IsTriangleIntersectingPlane(triangleWrapper.S0, triangleWrapper.S1, triangleWrapper.S2))
+				if (IsTriangleOnPlane(triangleWrapper.S0, triangleWrapper.S1, triangleWrapper.S2))
+				{
+					throw new System.ArgumentException("All triangle vertices are on the plane");
+				}
+				else if (!IsTriangleIntersectingPlane(triangleWrapper.S0, triangleWrapper.S1, triangleWrapper.S2))
 				{
 					AddTriangleToSliceWhenAllVerticesAreOnSameSide(twoSliceWrappers, triangleWrapper);
 				}
@@ -138,6 +158,12 @@ namespace PopcornGenerator
 			}
 
 			return twoSliceWrappers;
+		}
+
+		[MethodImpl(MethodImplOptions.AggressiveInlining)]
+		private static bool IsTriangleOnPlane(Plane.Side s0, Plane.Side s1, Plane.Side s2)
+		{
+			return s0 == Plane.Side.on && s1 == Plane.Side.on && s2 == Plane.Side.on;
 		}
 
 		[MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -191,13 +217,14 @@ namespace PopcornGenerator
 			AddTriangleToSliceWhenNoCutsAreMade(twoSliceWrappers, triangleWrapper, triangleWrapper.S0);
 		}
 
+		// Important Note: In Unity triangles use clockwise orientation
 		private static void AddTriangleToSliceWhenOneVertexIsOnPlane(
 			TwoSliceBuildingsWrapper twoSliceWrappers, SlicerTriangleWrapper triangleWrapper
 		)
 		{
 			if (triangleWrapper.S0 == Plane.Side.on)
 			{
-				//  v2 x-----x v1
+				//  v1 x-----x v2
 				//      \   /
 				//       \ /
 				// -------x------- Plane
@@ -206,7 +233,7 @@ namespace PopcornGenerator
 			}
 			else if (triangleWrapper.S1 == Plane.Side.on)
 			{
-				//  v0 x-----x v2
+				//  v2 x-----x v0
 				//      \   /
 				//       \ /
 				// -------x------- Plane
@@ -215,7 +242,7 @@ namespace PopcornGenerator
 			}
 			else if (triangleWrapper.S2 == Plane.Side.on)
 			{
-				//  v1 x-----x v0
+				//  v0 x-----x v1
 				//      \   /
 				//       \ /
 				// -------x------- Plane
@@ -234,7 +261,7 @@ namespace PopcornGenerator
 				//       / \
 				//      /   \
 				// ----x-----x---- Plane
-				//     v0    v1
+				//     v1    v0
 				AddTriangleToSliceWhenNoCutsAreMade(twoSliceWrappers, triangleWrapper, triangleWrapper.S2);
 			}
 			else if (triangleWrapper.S0 == Plane.Side.on && triangleWrapper.S2 == Plane.Side.on)
@@ -243,7 +270,7 @@ namespace PopcornGenerator
 				//       / \
 				//      /   \
 				// ----x-----x---- Plane
-				//     v2    v0
+				//     v0    v2
 				AddTriangleToSliceWhenNoCutsAreMade(twoSliceWrappers, triangleWrapper, triangleWrapper.S1);
 			}
 			else if (triangleWrapper.S1 == Plane.Side.on && triangleWrapper.S2 == Plane.Side.on)
@@ -252,7 +279,7 @@ namespace PopcornGenerator
 				//       / \
 				//      /   \
 				// ----x-----x---- Plane
-				//     v1    v2
+				//     v2    v1
 				AddTriangleToSliceWhenNoCutsAreMade(twoSliceWrappers, triangleWrapper, triangleWrapper.S0);
 			}
 		}
@@ -269,77 +296,77 @@ namespace PopcornGenerator
 			if (triangleWrapper.S0 == Plane.Side.on
 				&& cuttingPlane.Raycast(triangleWrapper.V1.Position, triangleWrapper.V2.Position, out t))
 			{
-				//        x v2
+				//        x v1
 				//       /|
 				//   v0 / | v12
 				// ----x--+------- Plane
 				//      \ |
 				//       \|
-				//        x v1
+				//        x v2
 				Vertex v12 = Vertex.Lerp(triangleWrapper.V1, triangleWrapper.V2, t);
 				SliceBuildingWrapper wrapperSideOfV1 = twoSliceWrappers.GetWrapperSameSide(triangleWrapper.S1);
 				SliceBuildingWrapper wrapperSideOfV2 = twoSliceWrappers.GetWrapperSameSide(triangleWrapper.S2);
 
-				int i0SideOfV1 = wrapperSideOfV1.GetVertexIndex(triangleWrapper.I0, triangleWrapper.V0);
-				int i12SideOfV1 = wrapperSideOfV1.GetInterpolatedVertexIndex(triangleWrapper.I1, triangleWrapper.I2, v12);
 				int i1SideOfV1 = wrapperSideOfV1.GetVertexIndex(triangleWrapper.I1, triangleWrapper.V1);
+				int i12SideOfV1 = wrapperSideOfV1.GetInterpolatedVertexIndex(triangleWrapper.I1, triangleWrapper.I2, v12);
+				int i0SideOfV1 = wrapperSideOfV1.GetVertexIndex(triangleWrapper.I0, triangleWrapper.V0);
 
 				int i0SideOfV2 = wrapperSideOfV2.GetVertexIndex(triangleWrapper.I0, triangleWrapper.V0);
 				int i12SideOfV2 = wrapperSideOfV2.GetInterpolatedVertexIndex(triangleWrapper.I1, triangleWrapper.I2, v12);
 				int i2SideOfV2 = wrapperSideOfV2.GetVertexIndex(triangleWrapper.I2, triangleWrapper.V2);
 
-				wrapperSideOfV2.Slice.Mesh.Triangles.Add(new Triangle(i0SideOfV2, i12SideOfV2, i2SideOfV2));
 				wrapperSideOfV1.Slice.Mesh.Triangles.Add(new Triangle(i1SideOfV1, i12SideOfV1, i0SideOfV1));
+				wrapperSideOfV2.Slice.Mesh.Triangles.Add(new Triangle(i0SideOfV2, i12SideOfV2, i2SideOfV2));
 			}
 			else if (triangleWrapper.S1 == Plane.Side.on
 				&& cuttingPlane.Raycast(triangleWrapper.V0.Position, triangleWrapper.V2.Position, out t))
 			{
-				//        x v0
+				//        x v2
 				//       /|
 				//   v1 / | v02
 				// ----x--+------- Plane
 				//      \ |
 				//       \|
-				//        x v2
+				//        x v0
 				Vertex v02 = Vertex.Lerp(triangleWrapper.V0, triangleWrapper.V2, t);
-				SliceBuildingWrapper wrapperSideOfV0 = twoSliceWrappers.GetWrapperSameSide(triangleWrapper.S0);
 				SliceBuildingWrapper wrapperSideOfV2 = twoSliceWrappers.GetWrapperSameSide(triangleWrapper.S2);
+				SliceBuildingWrapper wrapperSideOfV0 = twoSliceWrappers.GetWrapperSameSide(triangleWrapper.S0);
+
+				int i2SideOfV2 = wrapperSideOfV2.GetVertexIndex(triangleWrapper.I2, triangleWrapper.V2);
+				int i02SideOfV2 = wrapperSideOfV2.GetInterpolatedVertexIndex(triangleWrapper.I0, triangleWrapper.I2, v02);
+				int i1SideOfV2 = wrapperSideOfV2.GetVertexIndex(triangleWrapper.I1, triangleWrapper.V1);
 
 				int i1SideOfV0 = wrapperSideOfV0.GetVertexIndex(triangleWrapper.I1, triangleWrapper.V1);
 				int i02SideOfV0 = wrapperSideOfV0.GetInterpolatedVertexIndex(triangleWrapper.I0, triangleWrapper.I2, v02);
 				int i0SideOfV0 = wrapperSideOfV0.GetVertexIndex(triangleWrapper.I0, triangleWrapper.V0);
 
-				int i1SideOfV2 = wrapperSideOfV2.GetVertexIndex(triangleWrapper.I1, triangleWrapper.V1);
-				int i02SideOfV2 = wrapperSideOfV2.GetInterpolatedVertexIndex(triangleWrapper.I0, triangleWrapper.I2, v02);
-				int i2SideOfV2 = wrapperSideOfV2.GetVertexIndex(triangleWrapper.I2, triangleWrapper.V2);
-
+				wrapperSideOfV2.Slice.Mesh.Triangles.Add(new Triangle(i2SideOfV2, i02SideOfV2, i1SideOfV2));
 				wrapperSideOfV0.Slice.Mesh.Triangles.Add(new Triangle(i1SideOfV0, i02SideOfV0, i0SideOfV0));
-				wrapperSideOfV2.Slice.Mesh.Triangles.Add(new Triangle(i1SideOfV2, i02SideOfV2, i2SideOfV2));
 			}
 			else if (triangleWrapper.S2 == Plane.Side.on
 				&& cuttingPlane.Raycast(triangleWrapper.V0.Position, triangleWrapper.V1.Position, out t))
 			{
-				//        x v1
+				//        x v0
 				//       /|
 				//   v2 / | v01
 				// ----x--+------- Plane
 				//      \ |
 				//       \|
-				//        x v0
+				//        x v1
 				Vertex v01 = Vertex.Lerp(triangleWrapper.V0, triangleWrapper.V1, t);
 				SliceBuildingWrapper wrapperSideOfV0 = twoSliceWrappers.GetWrapperSameSide(triangleWrapper.S0);
 				SliceBuildingWrapper wrapperSideOfV1 = twoSliceWrappers.GetWrapperSameSide(triangleWrapper.S1);
 
-				int i2SideOfV0 = wrapperSideOfV0.GetVertexIndex(triangleWrapper.I2, triangleWrapper.V2);
-				int i01SideOfV0 = wrapperSideOfV0.GetInterpolatedVertexIndex(triangleWrapper.I0, triangleWrapper.I1, v01);
 				int i0SideOfV0 = wrapperSideOfV0.GetVertexIndex(triangleWrapper.I0, triangleWrapper.V0);
+				int i01SideOfV0 = wrapperSideOfV0.GetInterpolatedVertexIndex(triangleWrapper.I0, triangleWrapper.I1, v01);
+				int i2SideOfV0 = wrapperSideOfV0.GetVertexIndex(triangleWrapper.I2, triangleWrapper.V2);
 
-				int i2SideOfV1 = wrapperSideOfV1.GetVertexIndex(triangleWrapper.I2, triangleWrapper.V2);
-				int i01SideOfV1 = wrapperSideOfV1.GetInterpolatedVertexIndex(triangleWrapper.I0, triangleWrapper.I1, v01);
 				int i1SideOfV1 = wrapperSideOfV1.GetVertexIndex(triangleWrapper.I1, triangleWrapper.V1);
+				int i01SideOfV1 = wrapperSideOfV1.GetInterpolatedVertexIndex(triangleWrapper.I0, triangleWrapper.I1, v01);
+				int i2SideOfV1 = wrapperSideOfV1.GetVertexIndex(triangleWrapper.I2, triangleWrapper.V2);
 
-				wrapperSideOfV1.Slice.Mesh.Triangles.Add(new Triangle(i1SideOfV1, i01SideOfV1, i2SideOfV1));
 				wrapperSideOfV0.Slice.Mesh.Triangles.Add(new Triangle(i0SideOfV0, i01SideOfV0, i2SideOfV0));
+				wrapperSideOfV1.Slice.Mesh.Triangles.Add(new Triangle(i1SideOfV1, i01SideOfV1, i2SideOfV1));
 			}
 		}
 
@@ -361,11 +388,11 @@ namespace PopcornGenerator
 					&& cuttingPlane.Raycast(triangleWrapper.V1.Position, triangleWrapper.V2.Position, out t2))
 				{
 					//        x v1
-					//   v12 / \ v01
+					//   v01 / \ v12
 					// -----*---*----- Plane
-					//     /     \
+					//     / _/  \
 					//    x-------x
-					//    v2      v0
+					//    v0      v2
 					Vertex v12 = Vertex.Lerp(triangleWrapper.V1, triangleWrapper.V2, t2);
 					int i12SideOfV1 = wrapperSideOfV1.GetInterpolatedVertexIndex(triangleWrapper.I1, triangleWrapper.I2, v12);
 
@@ -376,42 +403,42 @@ namespace PopcornGenerator
 					int i12SideOfV2 = wrapperSideOfV2.GetInterpolatedVertexIndex(triangleWrapper.I1, triangleWrapper.I2, v12);
 					int i2SideOfV2 = wrapperSideOfV2.GetVertexIndex(triangleWrapper.I2, triangleWrapper.V2);
 
-					wrapperSideOfV1.Slice.Mesh.Triangles.Add(new Triangle(i12SideOfV1, i01SideOfV1, i1SideOfV1));
+					wrapperSideOfV1.Slice.Mesh.Triangles.Add(new Triangle(i1SideOfV1, i12SideOfV1, i01SideOfV1));
 					wrapperSideOfV2.Slice.Mesh.Triangles.Add(new Triangle(i0SideOfV2, i01SideOfV2, i12SideOfV2));
 					wrapperSideOfV2.Slice.Mesh.Triangles.Add(new Triangle(i0SideOfV2, i12SideOfV2, i2SideOfV2));
 				}
 				else if (cuttingPlane.Raycast(triangleWrapper.V0.Position, triangleWrapper.V2.Position, out t2))
 				{
 					//        x v0
-					//   v01 / \ v02
+					//   v02 / \ v01
 					// -----*---*----- Plane
-					//     /     \
+					//     / _/  \
 					//    x-------x
-					//    v1      v2
+					//    v2      v1
 					Vertex v02 = Vertex.Lerp(triangleWrapper.V0, triangleWrapper.V2, t2);
 					int i02SideOfV1 = wrapperSideOfV1.GetInterpolatedVertexIndex(triangleWrapper.I0, triangleWrapper.I2, v02);
 					int i2SideOfV1 = wrapperSideOfV1.GetVertexIndex(triangleWrapper.I2, triangleWrapper.V2);
 
 					SliceBuildingWrapper wrapperSideOfV0 = twoSliceWrappers.GetWrapperSameSide(triangleWrapper.S0);
 
+					int i0SideOfV0 = wrapperSideOfV0.GetVertexIndex(triangleWrapper.I0, triangleWrapper.V0);
 					int i01SideOfV0 = wrapperSideOfV0.GetInterpolatedVertexIndex(triangleWrapper.I0, triangleWrapper.I1, v01);
 					int i02SideOfV0 = wrapperSideOfV0.GetInterpolatedVertexIndex(triangleWrapper.I0, triangleWrapper.I2, v02);
-					int i0SideOfV0 = wrapperSideOfV0.GetVertexIndex(triangleWrapper.I0, triangleWrapper.V0);
 
 					wrapperSideOfV0.Slice.Mesh.Triangles.Add(new Triangle(i0SideOfV0, i01SideOfV0, i02SideOfV0));
-					wrapperSideOfV1.Slice.Mesh.Triangles.Add(new Triangle(i02SideOfV1, i01SideOfV1, i2SideOfV1));
-					wrapperSideOfV1.Slice.Mesh.Triangles.Add(new Triangle(i01SideOfV1, i1SideOfV1, i2SideOfV1));
+					wrapperSideOfV1.Slice.Mesh.Triangles.Add(new Triangle(i2SideOfV1, i02SideOfV1, i01SideOfV1));
+					wrapperSideOfV1.Slice.Mesh.Triangles.Add(new Triangle(i2SideOfV1, i01SideOfV1, i1SideOfV1));
 				}
 			}
 			else if (cuttingPlane.Raycast(triangleWrapper.V2.Position, triangleWrapper.V0.Position, out t1)
 				&& cuttingPlane.Raycast(triangleWrapper.V2.Position, triangleWrapper.V1.Position, out t2))
 			{
 				//        x v2
-				//   v20 / \ v21
+				//   v21 / \ v20
 				// -----*---*----- Plane
-				//     /     \
+				//     / _/  \
 				//    x-------x
-				//    v0      v1
+				//    v1      v0
 				Vertex v20 = Vertex.Lerp(triangleWrapper.V2, triangleWrapper.V0, t1);
 				Vertex v21 = Vertex.Lerp(triangleWrapper.V2, triangleWrapper.V1, t2);
 
@@ -427,9 +454,11 @@ namespace PopcornGenerator
 				int i20SideOfV0 = wrapperSideOfV0.GetInterpolatedVertexIndex(triangleWrapper.I2, triangleWrapper.I0, v20);
 				int i21SideOfV0 = wrapperSideOfV0.GetInterpolatedVertexIndex(triangleWrapper.I2, triangleWrapper.I1, v21);
 
-				wrapperSideOfV2.Slice.Mesh.Triangles.Add(new Triangle(i20SideOfV2, i21SideOfV2, i2SideOfV2));
-				wrapperSideOfV0.Slice.Mesh.Triangles.Add(new Triangle(i0SideOfV0, i21SideOfV0, i20SideOfV0));
-				wrapperSideOfV0.Slice.Mesh.Triangles.Add(new Triangle(i0SideOfV0, i1SideOfV0, i21SideOfV0));
+				wrapperSideOfV2.Slice.Mesh.Triangles.Add(new Triangle(i2SideOfV2, i20SideOfV2, i21SideOfV2));
+				//wrapperSideOfV0.Slice.Mesh.Triangles.Add(new Triangle(i0SideOfV0, i21SideOfV0, i20SideOfV0));
+				//wrapperSideOfV0.Slice.Mesh.Triangles.Add(new Triangle(i0SideOfV0, i1SideOfV0, i21SideOfV0));
+				wrapperSideOfV0.Slice.Mesh.Triangles.Add(new Triangle(i1SideOfV0, i21SideOfV0, i20SideOfV0));
+				wrapperSideOfV0.Slice.Mesh.Triangles.Add(new Triangle(i1SideOfV0, i20SideOfV0, i0SideOfV0));
 			}
 		}
 	}

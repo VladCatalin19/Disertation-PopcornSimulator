@@ -1,34 +1,34 @@
 ﻿using System.Collections.Generic;
 using UnityEngine;
-
-#if DEBUG
-using BoneTool.Script.Runtime;
-#endif
+using UnityEngine.Events;
 
 namespace PopcornGenerator
 {
 	public class PopcornGenerator : MonoBehaviour
 	{
 		[SerializeField] private GameObject kernel = null;
-		[SerializeField] private Transform[] cuttingPlanes = null;
-		[SerializeField] private Transform[] riggingPlanes = null;
-		[SerializeField] private Transform riggingRootBonePosition = null;
+		[SerializeField] private Transform cuttingPlanesParent = null;
+		[SerializeField] private Transform riggingPlanesParent = null;
+
+		[SerializeField] private AnimationCurve testCurve = null;
+		[SerializeField] private UnityEvent onKernelExpansion = null;
 
 		private System.Diagnostics.Stopwatch stopWatch;
 		private bool didPopcorn = false;
 
-		#if DEBUG
-		private static readonly Color[] colors = new Color[]
-		{
-			Color.white, Color.black, Color.red, Color.cyan,
-			Color.magenta, Color.blue, Color.green, Color.grey
-		};
-		#endif
+		private Plane[] cuttingPlanes = null;
+		private Plane[] riggingPlanes = null;
 
 		private void Start()
 		{
 			CheckIfFieldsAreGood();
 			stopWatch = new System.Diagnostics.Stopwatch();
+
+			cuttingPlanes = GenerateRandomCuttingPlanes();
+				//GenerateCuttingPlanes();
+			riggingPlanes = GenerateRiggingPlanes();
+
+			//PrintCurve();
 		}
 
 		private void Update()
@@ -40,7 +40,29 @@ namespace PopcornGenerator
 				stopWatch.Stop();
 
 				print($"Elapsed miliseconds: {stopWatch.ElapsedMilliseconds}");
+
+				didPopcorn = true;
+				HidePlanes();
+				onKernelExpansion.Invoke();
 			}
+		}
+
+		private void CheckIfFieldsAreGood()
+		{
+			if (kernel == null)
+				throw new System.ArgumentNullException("kernel");
+			if (!kernel.GetComponent<MeshFilter>())
+				throw new System.ArgumentException("Provided GameObject does not have a MeshFilter component");
+
+			if (cuttingPlanesParent == null)
+				throw new System.ArgumentNullException("cuttingPlanes");
+			if (cuttingPlanesParent.childCount == 0)
+				throw new System.ArgumentException("Provided CuttingPlanesParent has no children");
+
+			if (riggingPlanesParent == null)
+				throw new System.ArgumentNullException("riggingPlanes");
+			if (riggingPlanesParent.childCount == 0)
+				throw new System.ArgumentException("Provided RiggingPlanesParent has no children");
 		}
 
 		private void MakePopcorn()
@@ -48,66 +70,42 @@ namespace PopcornGenerator
 			Transform kernelTransform = kernel.transform;
 			MeshFilter kernelMeshFilter = kernel.GetComponent<MeshFilter>();
 			MeshRenderer kernelMeshRenderer = kernel.GetComponent<MeshRenderer>();
-			Plane[] cuttingPlanesSlicer = TransformsToPlanes(cuttingPlanes);
-			Plane[] riggingPlanesRigger = TransformsToPlanes(riggingPlanes);
+			//Plane[] cuttingPlanes = GenerateCuttingPlanes();
+			//Plane[] riggingPlanes = GenerateRiggingPlanes();
 			Mesh mesh = new Mesh(kernelMeshFilter.mesh);
 
 			Utils.TransformVerticesToWorldSpace(mesh.Vertices, kernelTransform);
-			var slices = Slicer.SliceMesh(mesh, cuttingPlanesSlicer);
-			var riggedSlices = Rigger.RigSlices(slices, riggingPlanesRigger);
-			var skinnedMeshRenderers = ConvertRiggedSlicesToMeshRenderers(	// TODO do this in a separate static class
+			var slices = Slicer.SliceMesh(mesh, cuttingPlanes);
+			Puffer.Puff(slices);
+			var riggedSlices = Rigger.RigSlices(slices, riggingPlanes);
+			var skinnedMeshRenderers = MeshProcessing.RiggedSlicesToSkinnedMeshRenderers(
 				riggedSlices, kernelTransform, kernelMeshRenderer
 			);
 
-			AnimateRiggedSlices(skinnedMeshRenderers);
+			Animator.Animate(skinnedMeshRenderers);
 
 			Destroy(kernelMeshFilter);
 			Destroy(kernelMeshRenderer);
-
-			didPopcorn = true;
-			HidePlanes();
 		}
 
-		private void CheckIfFieldsAreGood()
+		private Plane[] GenerateCuttingPlanes()
 		{
-			if (kernel == null)
+			return TransformsToPlanes(cuttingPlanesParent);
+		}
+
+		private Plane[] GenerateRiggingPlanes()
+		{
+			return TransformsToPlanes(riggingPlanesParent);
+		}
+
+		private Plane[] TransformsToPlanes(Transform planesParent)
+		{
+			Plane[] planes = new Plane[planesParent.childCount];
+			for (int planeIndex = 0; planeIndex < planes.Length; ++planeIndex)
 			{
-				throw new System.ArgumentNullException("kernel");
+				planes[planeIndex] = TransformToPlane(planesParent.GetChild(planeIndex));
 			}
-			if (!kernel.GetComponent<MeshFilter>())
-			{
-				throw new System.ArgumentException("Provided GameObject does not have a MeshFilter component");
-			}
-			if (cuttingPlanes == null)
-			{
-				throw new System.ArgumentNullException("cuttingPlanes");
-			}
-			if (cuttingPlanes.Length == 0)
-			{
-				throw new System.ArgumentException("Provided CuttingPlanes array is empty");
-			}
-			for (int cuttingPlaneIndex = 0; cuttingPlaneIndex < cuttingPlanes.Length; ++cuttingPlaneIndex)
-			{
-				if (!cuttingPlanes[cuttingPlaneIndex])
-				{
-					throw new System.ArgumentNullException($"cuttingPlanes[{cuttingPlaneIndex}]");
-				}
-			}
-			if (riggingPlanes == null)
-			{
-				throw new System.ArgumentNullException("riggingPlanes");
-			}
-			if (riggingPlanes.Length == 0)
-			{
-				throw new System.ArgumentException("Provided RiggingPlanes array is empty");
-			}
-			for (int riggingPlaneIndex = 0; riggingPlaneIndex < riggingPlanes.Length; ++riggingPlaneIndex)
-			{
-				if (!riggingPlanes[riggingPlaneIndex])
-				{
-					throw new System.ArgumentNullException($"riggingPlanes[{riggingPlaneIndex}]");
-				}
-			}
+			return planes;
 		}
 
 		private Plane TransformToPlane(Transform t)
@@ -117,228 +115,108 @@ namespace PopcornGenerator
 			return new Plane(planeNormal, planeInPoint);
 		}
 
-		private Plane[] TransformsToPlanes(Transform[] t)
+		private Plane[] GenerateRandomCuttingPlanes()
 		{
-			Plane[] planes = new Plane[t.Length];
+			int planesNum = Random.Range(2, 3);
+			Plane[] planes = new Plane[planesNum];
 
-			for (int i = 0; i < planes.Length; ++i)
+			float minAngleBetween = 50.0f;
+			float maxAngleBetween = 180.0f / planesNum;
+
+			float angleJitter = Random.Range(0.0f, 180.0f);
+
+			Vector2 randomVector = Random.insideUnitCircle.normalized;
+			Vector3 planesInPoint = kernel.transform.position;// + 0.1f * new Vector3(randomVector.x, 0.0f, randomVector.y);
+
+			float totalAngle = angleJitter;
+
+			for (int planeIndex = 0; planeIndex < planesNum; ++planeIndex)
 			{
-				planes[i] = TransformToPlane(t[i]);
+				Vector3 planeNormal = new Vector3(Mathf.Cos(totalAngle), 0.0f, Mathf.Sin(totalAngle));
+				planes[planeIndex] = new Plane(planeNormal, planesInPoint);
+
+				float currentAngle = Random.Range(minAngleBetween, maxAngleBetween);
+				totalAngle += currentAngle;
+
+				#if true
+				GameObject go = Instantiate(cuttingPlanesParent.GetChild(0).gameObject);
+				go.SetActive(true);
+				go.transform.position = kernel.transform.position;
+				go.transform.eulerAngles = new Vector3(0.0f, totalAngle, 90.0f);
+				go.transform.parent = cuttingPlanesParent;
+				print($"Angle between last 2 planes: {currentAngle}");
+
+				planes[planeIndex] = new Plane(go.transform.up, planesInPoint);
+
+				//Debug.Log($"{go2.transform.up} {planeNormal}");
+				#endif
 			}
 
+			#if false
+			float minAngle = 30.0f;
+			Vector2 randomVector = Random.insideUnitCircle;
+			Vector3 planesInPoint = transform.position + 0.1f * new Vector3(randomVector.x, 0.0f, randomVector.y);
+
+			for (int planeIndex = 0; planeIndex < planesNum; ++planeIndex)
+			{
+				int maxSteps = 100;
+				bool goodAngle = true;
+				Vector3 planeNormal;
+				do
+				{
+					randomVector = Random.insideUnitCircle;
+					planeNormal = new Vector3(randomVector.x, 0.0f, randomVector.y).normalized;
+
+					for (int planeIndexCheck = 0; planeIndexCheck < planeIndex; ++planeIndexCheck)
+					{
+						if (Vector3.Angle(planes[planeIndexCheck].Normal, planeNormal) < minAngle)
+						{
+							Debug.Log($"Angle: {Vector3.Angle(planes[planeIndexCheck].Normal, planeNormal)}");
+							goodAngle = false;
+							break;
+						}
+					}
+				}
+				while (!goodAngle && --maxSteps > 0);
+
+				if (maxSteps == 0)
+				{
+					Debug.LogError($"Max Steps reached");
+				}
+
+				planes[planeIndex] = new Plane(planeNormal, planesInPoint);
+			}
+			#endif
 			return planes;
 		}
 
 		private void HidePlanes()
 		{
-			foreach (Transform t in cuttingPlanes)
-			{
-				t.gameObject.SetActive(false);
-			}
-			foreach (Transform t in riggingPlanes)
-			{
-				t.gameObject.SetActive(false);
-			}
+			cuttingPlanesParent.gameObject.SetActive(false);
+			riggingPlanesParent.gameObject.SetActive(false);
 		}
 
-
-
-		private IList<SkinnedMeshRenderer> ConvertRiggedSlicesToMeshRenderers(
-			IList<RiggedSlice> riggedSlices, Transform kernelTransform, MeshRenderer kernelMeshRenderer
-		)
+		private void PrintCurve()
 		{
-			var skinnedMeshRenderers = new List<SkinnedMeshRenderer>(riggedSlices.Count);
+			System.Text.StringBuilder strBuilder = new System.Text.StringBuilder();
+			strBuilder.Append("new Keyframe[] {\n");
 
-			for (int riggedSliceIndex = 0; riggedSliceIndex < riggedSlices.Count; ++riggedSliceIndex)
+			System.Globalization.CultureInfo usFormat = new System.Globalization.CultureInfo("en-US");
+
+			foreach (Keyframe keyFrame in testCurve.keys)
 			{
-				RiggedSlice riggedSlice = riggedSlices[riggedSliceIndex];
-				GameObject sliceGO = CreateSliceGameObject(kernelTransform, riggedSliceIndex);
-
-				Utils.TransformVerticesToLocalSpace(riggedSlice.Slice.Mesh.Vertices, kernelTransform);
-				// Only vertices are transformed to local space. BonePositions are still
-				// in world space. This function uses world space coordinates.
-				Transform[] bones = CreateRiggedSliceBonesTransform(riggedSlice, sliceGO.transform);
-
-				UnityEngine.Mesh unityMesh = CreateUnityMesh(riggedSlice, riggedSliceIndex, kernelTransform, bones);
-				AddMeshFilterToSliceGO(sliceGO, unityMesh);
-				var skm = AddSkinnedMeshRendererToSliceGO(sliceGO, unityMesh, kernelMeshRenderer.material, bones);
-				skinnedMeshRenderers.Add(skm);
-
-				#if DEBUG
-				AddBoneVisualizerToSliceGO(sliceGO, bones[0]);
-
-				//ShowSliceBorderIndices(sliceGO, riggedSlice.Slice, colors[riggedSliceIndex % colors.Length]);
-				ShowSliceBorderIntersectingPlanesIndices(sliceGO, riggedSlice.Slice, colors[riggedSliceIndex % colors.Length]);
-				//ShowRiggedSliceBones(sliceGO, riggedSlice, colors[riggedSliceIndex % colors.Length]);
-				//ShowRiggedSliceZoneVertices(sliceGO, riggedSlice);
-
-				//ExportSliceAsObj(sliceGO, riggedSliceIndex, $@"{System.IO.Directory.GetCurrentDirectory()}\RuntimeExports\Slices");
-				#endif
+				strBuilder.Append("new Keyframe(")
+					.Append(keyFrame.time.ToString("F5", usFormat)).Append("f, ")
+					.Append(keyFrame.value.ToString("F5", usFormat)).Append("f, ")
+					.Append(keyFrame.inTangent.ToString("F5", usFormat)).Append("f, ")
+					.Append(keyFrame.outTangent.ToString("F5", usFormat)).Append("f, ")
+					.Append(keyFrame.inWeight.ToString("F5", usFormat)).Append("f, ")
+					.Append(keyFrame.outWeight.ToString("F5", usFormat))
+					.Append("f),\n");
 			}
 
-			return skinnedMeshRenderers;
+			strBuilder.Append("}");
+			print(strBuilder);
 		}
-
-		private static GameObject CreateSliceGameObject(Transform kernelTransform, int riggedSliceIndex)
-		{
-			GameObject sliceGO = new GameObject($"Slice {riggedSliceIndex}");
-			sliceGO.transform.SetParent(kernelTransform, false);
-			return sliceGO;
-		}
-
-		private static Transform[] CreateRiggedSliceBonesTransform(RiggedSlice riggedSlice, Transform rigParent)
-		{
-			Transform[] bones = new Transform[riggedSlice.BonePositions.Length];
-
-			for (int boneIndex = 0; boneIndex < bones.Length; ++boneIndex)
-			{
-				Transform bone = new GameObject($"Bone {boneIndex}").transform;
-				Transform prevBone = boneIndex == 0 ? rigParent : bones[boneIndex - 1];
-
-				bone.SetParent(prevBone, false);
-				bone.position = riggedSlice.BonePositions[boneIndex];
-				bone.rotation = Quaternion.identity;//Quaternion.LookRotation((prevBone.position - bone.position).normalized);
-				bones[boneIndex] = bone;
-			}
-
-			return bones;
-		}
-
-		private static UnityEngine.Mesh CreateUnityMesh(
-			RiggedSlice riggedSlice, int riggedSliceIndex, Transform kernelTransform, Transform[] bones
-		)
-		{
-			UnityEngine.Mesh unityMesh = riggedSlice.Slice.Mesh.ToUnityMesh();
-			unityMesh.name = $"Slice {riggedSliceIndex} mesh";
-			unityMesh.boneWeights = riggedSlice.BoneWeights;
-			unityMesh.bindposes = CreateRiggedSliceBindPoses(bones, kernelTransform);
-			return unityMesh;
-		}
-
-		private static Matrix4x4[] CreateRiggedSliceBindPoses(Transform[] bones, Transform kernelTransform)
-		{
-			Matrix4x4[] bindPoses = new Matrix4x4[bones.Length];
-
-			for (int bindPoseIndex = 0; bindPoseIndex < bindPoses.Length; ++bindPoseIndex)
-			{
-				bindPoses[bindPoseIndex] = bones[bindPoseIndex].worldToLocalMatrix * kernelTransform.localToWorldMatrix;
-			}
-
-			return bindPoses;
-		}
-
-		private static MeshFilter AddMeshFilterToSliceGO(GameObject sliceGO, UnityEngine.Mesh unityMesh)
-		{
-			MeshFilter sliceMeshFilter = sliceGO.AddComponent<MeshFilter>();
-			sliceMeshFilter.mesh = unityMesh;
-			return sliceMeshFilter;
-		}
-
-		private static SkinnedMeshRenderer AddSkinnedMeshRendererToSliceGO(
-			GameObject sliceGO, UnityEngine.Mesh unityMesh, Material material, Transform[] bones
-		)
-		{
-			SkinnedMeshRenderer sliceSkinnedMeshRenderer = sliceGO.AddComponent<SkinnedMeshRenderer>();
-			sliceSkinnedMeshRenderer.sharedMesh = unityMesh;
-			sliceSkinnedMeshRenderer.material = material;
-			sliceSkinnedMeshRenderer.rootBone = bones[0];
-			sliceSkinnedMeshRenderer.bones = bones;
-			return sliceSkinnedMeshRenderer;
-		}
-
-		private static void AnimateRiggedSlices(IList<SkinnedMeshRenderer> skinnedMeshRenderers)
-		{
-			for (int rendererIndex = 0; rendererIndex < skinnedMeshRenderers.Count; ++rendererIndex)
-			{
-				Animator.Animate(skinnedMeshRenderers[rendererIndex]);
-			}
-		}
-
-		#if DEBUG
-		private static void AddBoneVisualizerToSliceGO(GameObject sliceGO, Transform rootBone)
-		{
-			BoneVisualiser bv = sliceGO.AddComponent<BoneVisualiser>();
-			bv.RootNode = rootBone;
-			bv.BoneColor = Color.magenta;
-			bv.PopulateChildren();
-		}
-
-		private static void ShowSliceBorderIndices(GameObject sliceGO, Slice slice, Color indicesColor)
-		{
-			GameObject borderParent = new GameObject("Border Indices");
-			borderParent.transform.SetParent(sliceGO.transform, false);
-
-			foreach (int borderIndex in slice.Border.IndicesList)
-			{
-				GameObject go = GameObject.CreatePrimitive(PrimitiveType.Cube);
-				go.name = $"Index {borderIndex}";
-				go.transform.SetParent(borderParent.transform, false);
-				go.transform.localPosition = slice.Mesh.Vertices[borderIndex].Position;
-				go.transform.localScale = 0.05f * Vector3.one;
-				go.GetComponent<Renderer>().material.color = indicesColor;
-			}
-		}
-
-		private static void ShowSliceBorderIntersectingPlanesIndices(GameObject sliceGO, Slice slice, Color indicesColor)
-		{
-			GameObject borderIntersectingParent = new GameObject("Border Intersecting Planes Indices");
-			borderIntersectingParent.transform.SetParent(sliceGO.transform, false);
-
-			foreach (int borderIntersectingIndex in slice.Border.IntersectingIndices)
-			{
-				GameObject go = GameObject.CreatePrimitive(PrimitiveType.Cube);
-				go.name = $"Index {borderIntersectingIndex}";
-				go.transform.SetParent(borderIntersectingParent.transform, false);
-				go.transform.localPosition = slice.Mesh.Vertices[borderIntersectingIndex].Position;
-				go.transform.localScale = 0.05f * Vector3.one;
-				go.GetComponent<Renderer>().material.color = indicesColor;
-			}
-		}
-
-		private static void ShowRiggedSliceBones(GameObject sliceGO, RiggedSlice riggedSlice, Color bonesColor)
-		{
-			GameObject bonesParent = new GameObject("Bones");
-			bonesParent.transform.SetParent(sliceGO.transform, false);
-
-			for (int bonePositionIndex = 0; bonePositionIndex < riggedSlice.BonePositions.Length; ++bonePositionIndex)
-			{
-				GameObject go = GameObject.CreatePrimitive(PrimitiveType.Sphere);
-				go.name = $"Bone {bonePositionIndex}";
-				go.transform.SetParent(bonesParent.transform, false);
-				go.transform.position = riggedSlice.BonePositions[bonePositionIndex];
-				go.transform.localScale = 0.3f * Vector3.one;
-				go.GetComponent<Renderer>().material.color = bonesColor;
-			}
-		}
-
-		private static void ShowRiggedSliceZoneVertices(GameObject sliceGO, RiggedSlice riggedSlice)
-		{
-			int randColorStartIndex = Random.Range(0, colors.Length);
-			GameObject verticesParent = new GameObject("Vertices");
-			verticesParent.transform.SetParent(sliceGO.transform, false);
-
-			for (int zoneIndex = 0; zoneIndex < riggedSlice.RiggingZonesIndices.Count; ++zoneIndex)
-			{
-				Color color = colors[(randColorStartIndex + zoneIndex) % colors.Length];
-				GameObject zoneParent = new GameObject($"Zone {zoneIndex}");
-				zoneParent.transform.SetParent(verticesParent.transform, false);
-
-				foreach (int index in riggedSlice.RiggingZonesIndices[zoneIndex])
-				{
-					GameObject go = GameObject.CreatePrimitive(PrimitiveType.Cube);
-					go.name = $"Index {index}";
-					go.transform.SetParent(zoneParent.transform, false);
-					go.transform.localPosition = riggedSlice.Slice.Mesh.Vertices[index].Position;
-					go.transform.localScale = 0.05f * Vector3.one;
-					go.GetComponent<Renderer>().material.color = color;
-				}
-			}
-		}
-
-		private static void ExportSliceAsObj(GameObject sliceGO, int riggedSliceIndex, string directory)
-		{
-			ObjExporter.WriteMesh(sliceGO, $@"{directory}\slice{riggedSliceIndex}.obj");
-		}
-		#endif
 	}
 }

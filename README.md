@@ -1,7 +1,6 @@
 # Disertation-PopcornSimulator
 
 https://github.com/DavidArayan/ezy-slice
-https://github.com/KellanHiggins/UnityFBXExporter
 
 
 https://julien-tierny.github.io/stuff/papers/tierny_pg06.pdf

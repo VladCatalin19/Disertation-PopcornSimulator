@@ -9,11 +9,11 @@ namespace PopcornGenerator
 		private readonly ISet<int> indicesSet;
 		private readonly IList<int> intersectingPlanesIndices;
 
-		public Border(IList<int> indicesList, ISet<int> indicesSet, IList<int> intersectingIndices)
+		public Border(IList<int> indicesList, ISet<int> indicesSet, IList<int> intersectingPlanesIndices)
 		{
 			this.indicesList = indicesList;
 			this.indicesSet = indicesSet;
-			this.intersectingPlanesIndices = intersectingIndices;
+			this.intersectingPlanesIndices = intersectingPlanesIndices;
 		}
 
 		public IList<int> IndicesList { get => indicesList; }
