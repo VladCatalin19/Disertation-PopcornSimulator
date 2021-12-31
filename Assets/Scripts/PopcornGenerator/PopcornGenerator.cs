@@ -1,222 +1,219 @@
 ﻿using System.Collections.Generic;
+using System.Collections;
 using UnityEngine;
 using UnityEngine.Events;
+using UnityEngine.UI;
+
+using Stopwatch = System.Diagnostics.Stopwatch;
 
 namespace PopcornGenerator
 {
-	public class PopcornGenerator : MonoBehaviour
-	{
-		[SerializeField] private GameObject kernel = null;
-		[SerializeField] private Transform cuttingPlanesParent = null;
-		[SerializeField] private Transform riggingPlanesParent = null;
+    public class PopcornGenerator : MonoBehaviour
+    {
+        [SerializeField] private GameObject kernel = null;
+        [SerializeField] private Collider kernelCollider = null;
+        [SerializeField] private Transform cuttingPlanesParent = null;
+        [SerializeField] private Transform riggingPlanesParent = null;
 
-		[SerializeField] private AnimationCurve testCurve = null;
-		[SerializeField] private UnityEvent onKernelExpansion = null;
+        [SerializeField] private UnityEvent onKernelExpansion = null;
 
-		private System.Diagnostics.Stopwatch stopWatch;
-		private bool didPopcorn = false;
+        private Stopwatch stopWatch = null;
+        private bool didPopcorn = false;
 
-		private Plane[] cuttingPlanes = null;
-		private Plane[] riggingPlanes = null;
+        private Plane[] cuttingPlanes = null;
+        private Plane[] riggingPlanes = null;
 
-		private void Start()
-		{
-			CheckIfFieldsAreGood();
-			stopWatch = new System.Diagnostics.Stopwatch();
+        private void Start()
+        {
+            CheckIfFieldsAreGood();
+            stopWatch = new Stopwatch();
 
-			cuttingPlanes = GenerateRandomCuttingPlanes();
-				//GenerateCuttingPlanes();
-			riggingPlanes = GenerateRiggingPlanes();
+            cuttingPlanes = GenerateRandomCuttingPlanes();
+            riggingPlanes = GenerateRiggingPlanes();
+        }
 
-			//PrintCurve();
-		}
+        private void Update()
+        {
+            if (Input.GetButtonDown("Fire1") && !didPopcorn)
+            {
+                StartCoroutine(MakePopcorn());
 
-		private void Update()
-		{
-			if (Input.GetButtonDown("Fire1") && !didPopcorn)
-			{
-				stopWatch.Start();
-				MakePopcorn();
-				stopWatch.Stop();
+                //MakePopcornSequencial();
+            }
+        }
 
-				print($"Elapsed miliseconds: {stopWatch.ElapsedMilliseconds}");
+        private void CheckIfFieldsAreGood()
+        {
+            if (kernel == null)
+                throw new System.ArgumentNullException("kernel");
+            if (!kernel.GetComponent<MeshFilter>())
+                throw new System.ArgumentException("Provided GameObject does not have a MeshFilter component");
 
-				didPopcorn = true;
-				HidePlanes();
-				onKernelExpansion.Invoke();
-			}
-		}
+            if (cuttingPlanesParent == null)
+                throw new System.ArgumentNullException("cuttingPlanes");
+            if (cuttingPlanesParent.childCount == 0)
+                throw new System.ArgumentException("Provided CuttingPlanesParent has no children");
 
-		private void CheckIfFieldsAreGood()
-		{
-			if (kernel == null)
-				throw new System.ArgumentNullException("kernel");
-			if (!kernel.GetComponent<MeshFilter>())
-				throw new System.ArgumentException("Provided GameObject does not have a MeshFilter component");
+            if (riggingPlanesParent == null)
+                throw new System.ArgumentNullException("riggingPlanes");
+            if (riggingPlanesParent.childCount == 0)
+                throw new System.ArgumentException("Provided RiggingPlanesParent has no children");
+        }
 
-			if (cuttingPlanesParent == null)
-				throw new System.ArgumentNullException("cuttingPlanes");
-			if (cuttingPlanesParent.childCount == 0)
-				throw new System.ArgumentException("Provided CuttingPlanesParent has no children");
+        private IEnumerator MakePopcorn()
+        {
+            Transform kernelTransform = kernel.transform;
+            MeshFilter kernelMeshFilter = kernel.GetComponent<MeshFilter>();
+            MeshRenderer kernelMeshRenderer = kernel.GetComponent<MeshRenderer>();
+            Mesh mesh = new Mesh(kernelMeshFilter.mesh);
 
-			if (riggingPlanesParent == null)
-				throw new System.ArgumentNullException("riggingPlanes");
-			if (riggingPlanesParent.childCount == 0)
-				throw new System.ArgumentException("Provided RiggingPlanesParent has no children");
-		}
+            int slicesCount = (int)Mathf.Pow(2, cuttingPlanes.Length);
+            IList<Slice> slices = new List<Slice>(slicesCount);
+            IList<RiggedSlice> riggedSlices = new List<RiggedSlice>(slicesCount);
+            IList<SkinnedMeshRenderer> skinnedMeshRenderers = new List<SkinnedMeshRenderer>(slicesCount);
+            yield return null;
 
-		private void MakePopcorn()
-		{
-			Transform kernelTransform = kernel.transform;
-			MeshFilter kernelMeshFilter = kernel.GetComponent<MeshFilter>();
-			MeshRenderer kernelMeshRenderer = kernel.GetComponent<MeshRenderer>();
-			//Plane[] cuttingPlanes = GenerateCuttingPlanes();
-			//Plane[] riggingPlanes = GenerateRiggingPlanes();
-			Mesh mesh = new Mesh(kernelMeshFilter.mesh);
+            //Utils.TransformVerticesToWorldSpace(mesh.Vertices, kernelTransform);
+            IEnumerator slicerEnumerator = Slicer.SliceMesh(mesh, cuttingPlanes, slices);
+            IEnumerator pufferEnumerator = Puffer.Puff(slices);
+            IEnumerator riggerEnumerator = Rigger.RigSlices(slices, riggingPlanes, riggedSlices);
+            IEnumerator meshProcessingEnumerator = MeshProcessing.RiggedSlicesToSkinnedMeshRenderers(riggedSlices, kernelTransform,
+                                                                                                     kernelMeshRenderer, skinnedMeshRenderers);
+            print($"Slicer start");
+            while (slicerEnumerator.MoveNext())
+            {
+                yield return null;
+            }
+            print($"Slicer done {slices.Count}");
+            print($"Puffer start");
+            while (pufferEnumerator.MoveNext())
+            {
+                yield return null;
+            }
+            print($"Puffer done");
+            print($"Rigger start");
+            while (riggerEnumerator.MoveNext())
+            {
+                yield return null;
+            }
+            print($"Rigger done {riggedSlices.Count}");
+            print($"Mesh Processing start");
+            while (meshProcessingEnumerator.MoveNext())
+            {
+                yield return null;
+            }
+            print($"Mesh Processing done {skinnedMeshRenderers.Count}");
+            
+            print($"Adding colliders");
+            ColliderAdder.AddColliders(riggedSlices, skinnedMeshRenderers, kernelCollider, kernelTransform);
+            yield return null;
+            print($"Added colliders");
 
-			Utils.TransformVerticesToWorldSpace(mesh.Vertices, kernelTransform);
-			var slices = Slicer.SliceMesh(mesh, cuttingPlanes);
-			Puffer.Puff(slices);
-			var riggedSlices = Rigger.RigSlices(slices, riggingPlanes);
-			var skinnedMeshRenderers = MeshProcessing.RiggedSlicesToSkinnedMeshRenderers(
-				riggedSlices, kernelTransform, kernelMeshRenderer
-			);
+            print($"Adding animations");
+            Animator.Animate(skinnedMeshRenderers, kernelTransform);
+            yield return null;
+            print($"Added animations");
 
-			Animator.Animate(skinnedMeshRenderers);
+            Destroy(kernelMeshFilter);
+            Destroy(kernelMeshRenderer);
 
-			Destroy(kernelMeshFilter);
-			Destroy(kernelMeshRenderer);
-		}
+            didPopcorn = true;
+            HidePlanes();
+            onKernelExpansion.Invoke();
+        }
 
-		private Plane[] GenerateCuttingPlanes()
-		{
-			return TransformsToPlanes(cuttingPlanesParent);
-		}
+        private void MakePopcornSequencial()
+        {
+            long prevElapsed = 0;
+            long currElapsed = 0;
+            IEnumerator popcornEnumerator = MakePopcorn();
+            bool isEnumeratorMoving = true;
+            stopWatch.Start();
+            while (isEnumeratorMoving)
+            {
+                prevElapsed = stopWatch.ElapsedMilliseconds;
+                isEnumeratorMoving = popcornEnumerator.MoveNext();
+                currElapsed = stopWatch.ElapsedMilliseconds;
+                print($"Step miliseconds: {currElapsed - prevElapsed}");
+            }
+            stopWatch.Stop();
 
-		private Plane[] GenerateRiggingPlanes()
-		{
-			return TransformsToPlanes(riggingPlanesParent);
-		}
+            print($"Total time miliseconds: {stopWatch.ElapsedMilliseconds}");
+        }
 
-		private Plane[] TransformsToPlanes(Transform planesParent)
-		{
-			Plane[] planes = new Plane[planesParent.childCount];
-			for (int planeIndex = 0; planeIndex < planes.Length; ++planeIndex)
-			{
-				planes[planeIndex] = TransformToPlane(planesParent.GetChild(planeIndex));
-			}
-			return planes;
-		}
+        private Plane[] GenerateCuttingPlanes()
+        {
+            return TransformsToPlanes(cuttingPlanesParent);
+        }
 
-		private Plane TransformToPlane(Transform t)
-		{
-			Vector3 planeNormal = t.up;
-			Vector3 planeInPoint = t.position;
-			return new Plane(planeNormal, planeInPoint);
-		}
+        private Plane[] GenerateRiggingPlanes()
+        {
+            return TransformsToPlanes(riggingPlanesParent);
+        }
 
-		private Plane[] GenerateRandomCuttingPlanes()
-		{
-			int planesNum = Random.Range(2, 3);
-			Plane[] planes = new Plane[planesNum];
+        private Plane[] TransformsToPlanes(Transform planesParent)
+        {
+            Plane[] planes = new Plane[planesParent.childCount];
+            for (int planeIndex = 0; planeIndex < planes.Length; ++planeIndex)
+            {
+                planes[planeIndex] = TransformToPlane(planesParent.GetChild(planeIndex));
+                CreatePlaneGameObjects(planes[planeIndex], planesParent);
+            }
+            return planes;
+        }
 
-			float minAngleBetween = 50.0f;
-			float maxAngleBetween = 180.0f / planesNum;
+        private Plane TransformToPlane(Transform t)
+        {
+            Vector3 planeNormal = kernel.transform.InverseTransformDirection(t.up);
+            Vector3 planeInPoint = kernel.transform.InverseTransformPoint(t.position);
+            return new Plane(planeNormal, planeInPoint);
+        }
 
-			float angleJitter = Random.Range(0.0f, 180.0f);
+        private Plane[] GenerateRandomCuttingPlanes()
+        {
+            int planesNum = Random.Range(2, 3);
+            Plane[] planes = new Plane[planesNum];
 
-			Vector2 randomVector = Random.insideUnitCircle.normalized;
-			Vector3 planesInPoint = kernel.transform.position;// + 0.1f * new Vector3(randomVector.x, 0.0f, randomVector.y);
+            float minAngleBetween = 30.0F;
+            float maxAngleBetween = 180.0F / planesNum;
 
-			float totalAngle = angleJitter;
+            float angleJitter = Random.Range(0.0f, 180.0f);
 
-			for (int planeIndex = 0; planeIndex < planesNum; ++planeIndex)
-			{
-				Vector3 planeNormal = new Vector3(Mathf.Cos(totalAngle), 0.0f, Mathf.Sin(totalAngle));
-				planes[planeIndex] = new Plane(planeNormal, planesInPoint);
+            //Vector3 planesInPoint = kernel.transform.position;
+            Vector3 planesInPoint = kernel.transform.localPosition;
 
-				float currentAngle = Random.Range(minAngleBetween, maxAngleBetween);
-				totalAngle += currentAngle;
+            float totalAngle = angleJitter;
 
-				#if true
-				GameObject go = Instantiate(cuttingPlanesParent.GetChild(0).gameObject);
-				go.SetActive(true);
-				go.transform.position = kernel.transform.position;
-				go.transform.eulerAngles = new Vector3(0.0f, totalAngle, 90.0f);
-				go.transform.parent = cuttingPlanesParent;
-				print($"Angle between last 2 planes: {currentAngle}");
+            for (int planeIndex = 0; planeIndex < planesNum; ++planeIndex)
+            {
+                Quaternion q = Quaternion.Euler(0.0F, totalAngle, 90.0F);
+                Vector3 planeNormal = q * Vector3.up;
+                planes[planeIndex] = new Plane(planeNormal, planesInPoint);
 
-				planes[planeIndex] = new Plane(go.transform.up, planesInPoint);
+                float currentAngle = Random.Range(minAngleBetween, maxAngleBetween);
+                totalAngle += currentAngle;
 
-				//Debug.Log($"{go2.transform.up} {planeNormal}");
-				#endif
-			}
+                CreatePlaneGameObjects(planes[planeIndex], cuttingPlanesParent);
+            }
+            return planes;
+        }
 
-			#if false
-			float minAngle = 30.0f;
-			Vector2 randomVector = Random.insideUnitCircle;
-			Vector3 planesInPoint = transform.position + 0.1f * new Vector3(randomVector.x, 0.0f, randomVector.y);
+        private void CreatePlaneGameObjects(Plane plane, Transform planeParent)
+        {
+            GameObject go = Instantiate(planeParent.GetChild(0).gameObject);
+            go.SetActive(true);
+            go.transform.parent = planeParent;
 
-			for (int planeIndex = 0; planeIndex < planesNum; ++planeIndex)
-			{
-				int maxSteps = 100;
-				bool goodAngle = true;
-				Vector3 planeNormal;
-				do
-				{
-					randomVector = Random.insideUnitCircle;
-					planeNormal = new Vector3(randomVector.x, 0.0f, randomVector.y).normalized;
+            Vector3 inPoint = plane.Normal * plane.Distance;
+            go.transform.position = kernel.transform.TransformPoint(inPoint);
+            go.transform.rotation = Quaternion.FromToRotation(Vector3.up, kernel.transform.TransformDirection(plane.Normal));
+            //go.transform.eulerAngles = new Vector3(0.0f, totalAngle, 90.0f);
+        }
 
-					for (int planeIndexCheck = 0; planeIndexCheck < planeIndex; ++planeIndexCheck)
-					{
-						if (Vector3.Angle(planes[planeIndexCheck].Normal, planeNormal) < minAngle)
-						{
-							Debug.Log($"Angle: {Vector3.Angle(planes[planeIndexCheck].Normal, planeNormal)}");
-							goodAngle = false;
-							break;
-						}
-					}
-				}
-				while (!goodAngle && --maxSteps > 0);
-
-				if (maxSteps == 0)
-				{
-					Debug.LogError($"Max Steps reached");
-				}
-
-				planes[planeIndex] = new Plane(planeNormal, planesInPoint);
-			}
-			#endif
-			return planes;
-		}
-
-		private void HidePlanes()
-		{
-			cuttingPlanesParent.gameObject.SetActive(false);
-			riggingPlanesParent.gameObject.SetActive(false);
-		}
-
-		private void PrintCurve()
-		{
-			System.Text.StringBuilder strBuilder = new System.Text.StringBuilder();
-			strBuilder.Append("new Keyframe[] {\n");
-
-			System.Globalization.CultureInfo usFormat = new System.Globalization.CultureInfo("en-US");
-
-			foreach (Keyframe keyFrame in testCurve.keys)
-			{
-				strBuilder.Append("new Keyframe(")
-					.Append(keyFrame.time.ToString("F5", usFormat)).Append("f, ")
-					.Append(keyFrame.value.ToString("F5", usFormat)).Append("f, ")
-					.Append(keyFrame.inTangent.ToString("F5", usFormat)).Append("f, ")
-					.Append(keyFrame.outTangent.ToString("F5", usFormat)).Append("f, ")
-					.Append(keyFrame.inWeight.ToString("F5", usFormat)).Append("f, ")
-					.Append(keyFrame.outWeight.ToString("F5", usFormat))
-					.Append("f),\n");
-			}
-
-			strBuilder.Append("}");
-			print(strBuilder);
-		}
-	}
+        private void HidePlanes()
+        {
+            cuttingPlanesParent.gameObject.SetActive(false);
+            riggingPlanesParent.gameObject.SetActive(false);
+        }
+    }
 }
