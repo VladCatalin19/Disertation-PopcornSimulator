@@ -26,21 +26,24 @@ namespace PopcornGenerator
             public AnimationCurve CurveW { get => curveW; }
         }
 
-        public static void Animate(ICollection<SkinnedMeshRenderer> skinnedMeshRenderers, Transform centerOfKernel)
+        public static void Animate(ICollection<SkinnedMeshRenderer> skinnedMeshRenderers, Transform centerOfKernel,
+                                   float minDuration, float maxDuration)
         {
             foreach (SkinnedMeshRenderer smr in skinnedMeshRenderers)
             {
-                Animate(smr, centerOfKernel);
+                Animate(smr, centerOfKernel, minDuration, maxDuration);
             }
         }
 
-        public static void Animate(SkinnedMeshRenderer skinnedMeshRenderer, Transform centerOfKernel)
+        public static void Animate(SkinnedMeshRenderer skinnedMeshRenderer, Transform centerOfKernel,
+                                   float minDuration, float maxDuration)
         {
             Transform[] bones = skinnedMeshRenderer.bones;
 
             for (int boneIndex = 1; boneIndex < bones.Length; ++boneIndex)
             {
-                AnimateBone(bones[boneIndex], bones[boneIndex - 1], centerOfKernel, boneIndex, bones.Length - 1);
+                AnimateBone(bones[boneIndex], bones[boneIndex - 1], centerOfKernel, boneIndex, bones.Length - 1,
+                            minDuration, maxDuration);
             }
         }
         
@@ -48,7 +51,8 @@ namespace PopcornGenerator
         // Center part
         // Curved white stuff
 
-        private static void AnimateBone(Transform bone, Transform previousBone, Transform centerOfKernel, int depth, int maxDepth)
+        private static void AnimateBone(Transform bone, Transform previousBone, Transform centerOfKernel,
+                                        int depth, int maxDepth, float minDuration, float maxDuration)
         {
             Animation animation = bone.gameObject.AddComponent<Animation>();
             QuaternionCurves curves = new QuaternionCurves();
@@ -64,7 +68,7 @@ namespace PopcornGenerator
             //DrawDebugLines(bone, localDirectionToPreviousBone, localDirectionToCenterOfKernel, desiredLocalRotation);
 
             curves.AllocateCurves();
-            InitializeQuaternionCuves(curves, localRotation, desiredLocalRotation);
+            InitializeQuaternionCuves(curves, localRotation, desiredLocalRotation, minDuration, maxDuration);
             AnimationClip clip = CreateAnnimationClip(curves);
             StartAnnimation(animation, clip);
         }
@@ -108,34 +112,36 @@ namespace PopcornGenerator
         }
 
         private static void InitializeQuaternionCuves(QuaternionCurves curves, Quaternion localRotation,
-                                                      Quaternion desiredLocalRotation)
+                                                      Quaternion desiredLocalRotation,
+                                                      float minDuration, float maxDuration)
         {
-            curves.CurveX.keys = GetKeyFrameArray(localRotation.x, desiredLocalRotation.x);
-            curves.CurveY.keys = GetKeyFrameArray(localRotation.y, desiredLocalRotation.y);
-            curves.CurveZ.keys = GetKeyFrameArray(localRotation.z, desiredLocalRotation.z);
-            curves.CurveW.keys = GetKeyFrameArray(localRotation.w, desiredLocalRotation.w);
+            curves.CurveX.keys = GetKeyFrameArray(localRotation.x, desiredLocalRotation.x, Random.Range(minDuration, maxDuration));
+            curves.CurveY.keys = GetKeyFrameArray(localRotation.y, desiredLocalRotation.y, Random.Range(minDuration, maxDuration));
+            curves.CurveZ.keys = GetKeyFrameArray(localRotation.z, desiredLocalRotation.z, Random.Range(minDuration, maxDuration));
+            curves.CurveW.keys = GetKeyFrameArray(localRotation.w, desiredLocalRotation.w, Random.Range(minDuration, maxDuration));
         }
 
-        private static Keyframe[] GetKeyFrameArray(float initialValue, float finalValue)
+        private static Keyframe[] GetKeyFrameArray(float initialValue, float finalValue, float duration)
         {
-            float endTime = Random.Range(0.5f, 4.5f);
             return new Keyframe[]
             {
                 new Keyframe(0, initialValue/*, 2.882769f, 2.882769f, 0f, 0.4358931f*/),
-                new Keyframe(endTime, finalValue/*, 2.882769f, 2.882769f, 0f, 0.4358931f*/),
+                new Keyframe(duration, finalValue/*, 2.882769f, 2.882769f, 0f, 0.4358931f*/),
             };
         }
 
         private static AnimationClip CreateAnnimationClip(QuaternionCurves curves)
         {
-            AnimationClip clip = new AnimationClip();
+            AnimationClip clip = new AnimationClip
+            {
+                legacy = true,
+                wrapMode = WrapMode.Once
+            };
+            clip.EnsureQuaternionContinuity();
             clip.SetCurve("", typeof(Transform), "localRotation.x", curves.CurveX);
             clip.SetCurve("", typeof(Transform), "localRotation.y", curves.CurveY);
             clip.SetCurve("", typeof(Transform), "localRotation.z", curves.CurveZ);
             clip.SetCurve("", typeof(Transform), "localRotation.w", curves.CurveW);
-            clip.legacy = true;
-            clip.wrapMode = WrapMode.Once;
-            clip.EnsureQuaternionContinuity();
             return clip;
         }
 

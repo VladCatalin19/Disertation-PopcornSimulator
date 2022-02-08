@@ -19,6 +19,7 @@ namespace PopcornGenerator
             {
                 RiggedSlice riggedSlice = riggedSlices[riggedSliceIndex];
                 GameObject sliceGO = CreateSliceGameObject(kernelTransform, riggedSliceIndex);
+                sliceGO.layer = LayerMask.NameToLayer("Popcorn");
 
                 //Utils.TransformVerticesToLocalSpace(riggedSlice.Slice.Mesh.Vertices, kernelTransform);
                 

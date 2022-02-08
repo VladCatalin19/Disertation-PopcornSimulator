@@ -21,6 +21,12 @@ public class TempMiddlePartExpander : MonoBehaviour
 
     private float elapsedTime = 0.0f;
 
+    public float ExpansionTime
+    {
+        get => expansionTime;
+        set => expansionTime = value;
+    }
+
     private void Awake()
     {
         elapsedTime = 0.0f;

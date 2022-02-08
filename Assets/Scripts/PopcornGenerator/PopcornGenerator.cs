@@ -18,7 +18,12 @@ namespace PopcornGenerator
         [SerializeField] private UnityEvent onKernelExpansion = null;
 
         private Stopwatch stopWatch = null;
-        private bool didPopcorn = false;
+
+        public Lumpn.Threading.IThread UnityThread { get; set; }
+        public Lumpn.Threading.IThread WorkerThread  { get; set; }
+
+        public float MinExpansionTime { get; set; }
+        public float MaxExpansionTime { get; set; }
 
         private Plane[] cuttingPlanes = null;
         private Plane[] riggingPlanes = null;
@@ -30,16 +35,6 @@ namespace PopcornGenerator
 
             cuttingPlanes = GenerateRandomCuttingPlanes();
             riggingPlanes = GenerateRiggingPlanes();
-        }
-
-        private void Update()
-        {
-            if (Input.GetButtonDown("Fire1") && !didPopcorn)
-            {
-                StartCoroutine(MakePopcorn());
-
-                //MakePopcornSequencial();
-            }
         }
 
         private void CheckIfFieldsAreGood()
@@ -60,12 +55,15 @@ namespace PopcornGenerator
                 throw new System.ArgumentException("Provided RiggingPlanesParent has no children");
         }
 
-        private IEnumerator MakePopcorn()
+        public IEnumerator MakePopcornCoroutine()
         {
             Transform kernelTransform = kernel.transform;
             MeshFilter kernelMeshFilter = kernel.GetComponent<MeshFilter>();
             MeshRenderer kernelMeshRenderer = kernel.GetComponent<MeshRenderer>();
             Mesh mesh = new Mesh(kernelMeshFilter.mesh);
+
+            //yield return WorkerThread.Context;
+            yield return null;
 
             int slicesCount = (int)Mathf.Pow(2, cuttingPlanes.Length);
             IList<Slice> slices = new List<Slice>(slicesCount);
@@ -79,60 +77,64 @@ namespace PopcornGenerator
             IEnumerator riggerEnumerator = Rigger.RigSlices(slices, riggingPlanes, riggedSlices);
             IEnumerator meshProcessingEnumerator = MeshProcessing.RiggedSlicesToSkinnedMeshRenderers(riggedSlices, kernelTransform,
                                                                                                      kernelMeshRenderer, skinnedMeshRenderers);
-            print($"Slicer start");
+            //print($"Slicer start");
             while (slicerEnumerator.MoveNext())
             {
                 yield return null;
             }
-            print($"Slicer done {slices.Count}");
-            print($"Puffer start");
+            //print($"Slicer done {slices.Count}");
+            //print($"Puffer start");
             while (pufferEnumerator.MoveNext())
             {
                 yield return null;
             }
-            print($"Puffer done");
-            print($"Rigger start");
+            //print($"Puffer done");
+            //print($"Rigger start");
             while (riggerEnumerator.MoveNext())
             {
                 yield return null;
             }
-            print($"Rigger done {riggedSlices.Count}");
-            print($"Mesh Processing start");
+            //print($"Rigger done {riggedSlices.Count}");
+
+            //yield return UnityThread.Context;
+
+            //print($"Mesh Processing start");
             while (meshProcessingEnumerator.MoveNext())
             {
                 yield return null;
             }
-            print($"Mesh Processing done {skinnedMeshRenderers.Count}");
+            //print($"Mesh Processing done {skinnedMeshRenderers.Count}");
             
-            print($"Adding colliders");
+            //print($"Adding colliders");
             ColliderAdder.AddColliders(riggedSlices, skinnedMeshRenderers, kernelCollider, kernelTransform);
             yield return null;
-            print($"Added colliders");
+            //print($"Added colliders");
 
-            print($"Adding animations");
-            Animator.Animate(skinnedMeshRenderers, kernelTransform);
+            //print($"Adding animations");
+            Animator.Animate(skinnedMeshRenderers, kernelTransform, MinExpansionTime, MaxExpansionTime);
             yield return null;
-            print($"Added animations");
+            //print($"Added animations");
 
             Destroy(kernelMeshFilter);
             Destroy(kernelMeshRenderer);
 
-            didPopcorn = true;
             HidePlanes();
             onKernelExpansion.Invoke();
         }
 
-        private void MakePopcornSequencial()
+        public void MakePopcornSequencial()
         {
-            long prevElapsed = 0;
-            long currElapsed = 0;
-            IEnumerator popcornEnumerator = MakePopcorn();
+            long prevElapsed;
+            long currElapsed;
+            IEnumerator popcornEnumerator = MakePopcornCoroutine();
             bool isEnumeratorMoving = true;
             stopWatch.Start();
             while (isEnumeratorMoving)
             {
                 prevElapsed = stopWatch.ElapsedMilliseconds;
+                print($"Before enumerator move next");
                 isEnumeratorMoving = popcornEnumerator.MoveNext();
+                print($"After enumerator move next");
                 currElapsed = stopWatch.ElapsedMilliseconds;
                 print($"Step miliseconds: {currElapsed - prevElapsed}");
             }
@@ -205,8 +207,8 @@ namespace PopcornGenerator
             go.transform.parent = planeParent;
 
             Vector3 inPoint = plane.Normal * plane.Distance;
-            go.transform.position = kernel.transform.TransformPoint(inPoint);
-            go.transform.rotation = Quaternion.FromToRotation(Vector3.up, kernel.transform.TransformDirection(plane.Normal));
+            go.transform.SetPositionAndRotation(kernel.transform.TransformPoint(inPoint),
+                                                Quaternion.FromToRotation(Vector3.up, kernel.transform.TransformDirection(plane.Normal)));
             //go.transform.eulerAngles = new Vector3(0.0f, totalAngle, 90.0f);
         }
 
