@@ -132,11 +132,8 @@ namespace PopcornGenerator
 
         private static AnimationClip CreateAnnimationClip(QuaternionCurves curves)
         {
-            AnimationClip clip = new AnimationClip
-            {
-                legacy = true,
-                wrapMode = WrapMode.Once
-            };
+            AnimationClip clip = new AnimationClip { legacy = true,
+                                                     wrapMode = WrapMode.Once };
             clip.EnsureQuaternionContinuity();
             clip.SetCurve("", typeof(Transform), "localRotation.x", curves.CurveX);
             clip.SetCurve("", typeof(Transform), "localRotation.y", curves.CurveY);

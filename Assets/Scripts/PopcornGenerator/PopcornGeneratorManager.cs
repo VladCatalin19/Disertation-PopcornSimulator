@@ -14,14 +14,14 @@ namespace PopcornGenerator
         [Space]
         [SerializeField] private Text numberOfKernelsText = null;
 
-        private IList<PopcornGenerator> popcornGenerators = null;
+        [SerializeField] private List<PopcornGenerator> popcornGenerators = null;
         private Transform[] kernelSpawnPositions = null;
 
         private int kernelsSpawned = 0;
         private bool didPopcorn = false;
 
-        private Lumpn.Threading.IThread unityThread = null;
-        private Lumpn.Threading.IThread[] workerThreads = null;
+        //private Lumpn.Threading.IThread unityThread = null;
+        //private Lumpn.Threading.IThread[] workerThreads = null;
 
 
         private void Awake()
@@ -38,7 +38,10 @@ namespace PopcornGenerator
             //    popcornGenerators[childIndex] = kernelsParent.GetChild(childIndex).GetComponent<PopcornGenerator>();
             //}
 
-            popcornGenerators = new List<PopcornGenerator>();
+            if (popcornGenerators == null)
+            {
+                popcornGenerators = new List<PopcornGenerator>();
+            }
 
             //unityThread = Lumpn.Threading.ThreadUtils.StartUnityThread("PopcornGeneratorManager", kernelsParent.childCount, this);
 
@@ -53,9 +56,10 @@ namespace PopcornGenerator
         private void Update()
         {
             bool shouldSpawnKernels = Input.GetButtonDown("KernelSpawn");
+            bool shouldMakePopcornSequencial = Input.GetButtonDown("SequencialPop");
             bool shouldMakePopcornNormally = Input.GetButtonDown("NormalPop");
             bool shouldMakePopcornRandomly = Input.GetButtonDown("RandomPop");
-            bool shouldMakePopcorn = shouldMakePopcornNormally || shouldMakePopcornRandomly;
+            bool shouldMakePopcorn = shouldMakePopcornNormally || shouldMakePopcornRandomly || shouldMakePopcornSequencial;
 
             if (shouldSpawnKernels)
             {
@@ -78,7 +82,10 @@ namespace PopcornGenerator
 
                     ++kernelsSpawned;
                 }
-                numberOfKernelsText.text = kernelsSpawned.ToString();
+                if ((bool)numberOfKernelsText)
+                {
+                    numberOfKernelsText.text = kernelsSpawned.ToString();
+                }
             }
 
             if (shouldMakePopcorn && !didPopcorn)
@@ -90,6 +97,10 @@ namespace PopcornGenerator
                 else if (shouldMakePopcornRandomly)
                 {
                     print($"Making popcorn randomly");
+                }
+                else if (shouldMakePopcornSequencial)
+                {
+                    print($"Making popcorn sequencial");
                 }
 
                 //MakePopcornSequencial();
@@ -104,11 +115,14 @@ namespace PopcornGenerator
                     //popcornGenerator.UnityThread = unityThread;
                     //popcornGenerator.WorkerThread = workerThreads[popcornGeneratorIndex];
 
-                    popcornGenerator.MinExpansionTime = 0.1F;
-                    popcornGenerator.MaxExpansionTime = 1.5F;
+                    popcornGenerator.MinExpansionTime = 2.1F;
+                    popcornGenerator.MaxExpansionTime = 2.5F;
 
                     var middlePartExpander = popcornGenerator.GetComponentInChildren<TempMiddlePartExpander>();
-                    middlePartExpander.ExpansionTime = Random.Range(popcornGenerator.MinExpansionTime, popcornGenerator.MaxExpansionTime);
+                    if ((bool)middlePartExpander)
+                    {
+                        middlePartExpander.ExpansionTime = Random.Range(popcornGenerator.MinExpansionTime, popcornGenerator.MaxExpansionTime);
+                    }
 
                     if (shouldMakePopcornNormally)
                     {
@@ -117,6 +131,10 @@ namespace PopcornGenerator
                     else if (shouldMakePopcornRandomly)
                     {
                         StartCoroutine(WaitAndMakePopcorn(popcornGenerator));
+                    }
+                    else if (shouldMakePopcornSequencial)
+                    {
+                        popcornGenerator.MakePopcornSequencial();
                     }
                 }
 

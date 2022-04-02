@@ -5,15 +5,27 @@ namespace PopcornGenerator
 {
     internal class Mesh
     {
+        public const int kernelSubmeshIndex = 0;
+        public const int puffSubmeshIndex = 1;
+
         private readonly IList<Vertex> vertices;
-        private readonly IList<Triangle> triangles;
+        private readonly IList<IList<Triangle>> subMeshTriangles;
         private readonly bool hasNormals;
         private readonly bool hasUVs;
 
         public Mesh(bool hasNormals = false, bool hasUVs = false)
         {
             vertices = new List<Vertex>();
-            triangles = new List<Triangle>();
+            subMeshTriangles = new List<IList<Triangle>>();
+            subMeshTriangles.Add(new List<Triangle>());
+            this.hasNormals = hasNormals;
+            this.hasUVs = hasUVs;
+        }
+
+        public Mesh(IList<Vertex> vertices, IList<IList<Triangle>> subMeshTriangles, bool hasNormals = false, bool hasUVs = false)
+        {
+            this.vertices = vertices;
+            this.subMeshTriangles = subMeshTriangles;
             this.hasNormals = hasNormals;
             this.hasUVs = hasUVs;
         }
@@ -33,33 +45,33 @@ namespace PopcornGenerator
                 this.vertices.Add(new Vertex(position, normal, uv));
             }
 
-            this.triangles = new List<Triangle>(triangles.Length / 3);
+            var trianglesList = new List<Triangle>(triangles.Length / 3);
             for (int triangleIndex = 0; triangleIndex < triangles.Length; triangleIndex += 3)
             {
                 int i0 = triangles[triangleIndex];
                 int i1 = triangles[triangleIndex + 1];
                 int i2 = triangles[triangleIndex + 2];
 
-                this.triangles.Add(new Triangle(i0, i1, i2));
+                trianglesList.Add(new Triangle(i0, i1, i2));
             }
+
+            subMeshTriangles = new List<IList<Triangle>>();
+            subMeshTriangles.Add(trianglesList);
 
             hasNormals = normals != null && normals.Length == vertices.Length;
             hasUVs = uvs != null && uvs.Length == vertices.Length;
         }
 
         public IList<Vertex> Vertices { get => vertices; }
-        public IList<Triangle> Triangles { get => triangles; }
+        public IList<IList<Triangle>> SubMeshTriangles { get => subMeshTriangles; }
         public bool HasNormals { get => hasNormals; }
         public bool HasUVs { get => hasUVs; }
 
         public UnityEngine.Mesh ToUnityMesh()
         {
-            UnityEngine.Mesh unityMesh = new UnityEngine.Mesh();
-            
             Vector3[] unityVertices = new Vector3[vertices.Count];
             Vector3[] unityNormals = hasNormals ? new Vector3[vertices.Count] : null;
             Vector2[] unityUVs = hasUVs ? new Vector2[vertices.Count] : null;
-            int[] unityTriangles = new int[triangles.Count * 3];
 
             for (int vertexIndex = 0; vertexIndex < vertices.Count; ++vertexIndex)
             {
@@ -74,17 +86,27 @@ namespace PopcornGenerator
                 }
             }
 
-            for (int triangleIndex = 0; triangleIndex < triangles.Count; ++triangleIndex)
+            UnityEngine.Mesh unityMesh = new UnityEngine.Mesh
             {
-                unityTriangles[3 * triangleIndex] = triangles[triangleIndex].I0;
-                unityTriangles[3 * triangleIndex + 1] = triangles[triangleIndex].I1;
-                unityTriangles[3 * triangleIndex + 2] = triangles[triangleIndex].I2;
+                vertices = unityVertices,
+                normals = unityNormals,
+                uv = unityUVs,
+                subMeshCount = subMeshTriangles.Count,
+            };
+
+            for (int submeshIndex = 0; submeshIndex < subMeshTriangles.Count; ++submeshIndex)
+            {
+                var triangles = subMeshTriangles[submeshIndex];
+                int[] unityTriangles = new int[triangles.Count * 3];
+                for (int triangleIndex = 0; triangleIndex < triangles.Count; ++triangleIndex)
+                {
+                    unityTriangles[3 * triangleIndex] = triangles[triangleIndex].I0;
+                    unityTriangles[3 * triangleIndex + 1] = triangles[triangleIndex].I1;
+                    unityTriangles[3 * triangleIndex + 2] = triangles[triangleIndex].I2;
+                }
+                unityMesh.SetTriangles(unityTriangles, submeshIndex);
             }
 
-            unityMesh.vertices = unityVertices;
-            unityMesh.normals = unityNormals;
-            unityMesh.uv = unityUVs;
-            unityMesh.triangles = unityTriangles;
             return unityMesh;
         }
     }

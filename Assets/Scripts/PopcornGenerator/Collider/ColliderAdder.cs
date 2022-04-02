@@ -22,7 +22,7 @@ namespace PopcornGenerator
 
                 for (int riggingZoneIndex = 0; riggingZoneIndex < riggedSlice.RiggingZonesIndices.Count; ++riggingZoneIndex)
                 {
-                    IList<int> zoneIndices = riggedSlice.RiggingZonesIndices[riggingZoneIndex];
+                    ISet<int> zoneIndices = riggedSlice.RiggingZonesIndices[riggingZoneIndex];
                     Transform bone = bones[riggingZoneIndex];
                     Bounds zoneBounds = CalculateRiggedZoneBounds(slice, zoneIndices, bone, kernelTransform);
 
@@ -42,7 +42,7 @@ namespace PopcornGenerator
             }
         }
 
-        private static Bounds CalculateRiggedZoneBounds(Slice slice, IList<int> zoneIndices, Transform bone,
+        private static Bounds CalculateRiggedZoneBounds(Slice slice, ISet<int> zoneIndices, Transform bone,
                                                         Transform kernelTransform)
         {
             Bounds bounds = new Bounds();

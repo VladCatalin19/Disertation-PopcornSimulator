@@ -12265,7 +12265,7 @@ Camera:
     width: 1
     height: 1
   near clip plane: 0.01
-  far clip plane: 1000
+  far clip plane: 10000
   field of view: 60
   orthographic: 0
   orthographic size: 5
@@ -12315,13 +12315,13 @@ MonoBehaviour:
   m_RequiresOpaqueTextureOption: 2
   m_CameraType: 0
   m_Cameras: []
-  m_RendererIndex: -1
+  m_RendererIndex: 0
   m_VolumeLayerMask:
     serializedVersion: 2
     m_Bits: 1
   m_VolumeTrigger: {fileID: 0}
-  m_RenderPostProcessing: 0
-  m_Antialiasing: 0
+  m_RenderPostProcessing: 1
+  m_Antialiasing: 2
   m_AntialiasingQuality: 2
   m_StopNaN: 0
   m_Dithering: 0
@@ -12342,8 +12342,8 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 74baca8d339de63c5a603a8da05ae258, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  moveSpeed: 9
-  runSpeed: 27
+  moveSpeed: 30
+  runSpeed: 50
   verticalSensitivity: 1
   horizontalSensitivity: 1
   minPitchDegrees: -90
@@ -13850,6 +13850,7 @@ MonoBehaviour:
   kernelSpawnPositionsParend: {fileID: 2089644763}
   kernelsParent: {fileID: 1417704734}
   numberOfKernelsText: {fileID: 1153487323}
+  popcornGenerators: []
 --- !u!1001 &1429728369
 PrefabInstance:
   m_ObjectHideFlags: 0

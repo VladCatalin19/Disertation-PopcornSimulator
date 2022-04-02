@@ -52,9 +52,8 @@ namespace PopcornGenerator
         {
             for (int vertexIndex = 0; vertexIndex < riggedSlice.Slice.Mesh.Vertices.Count; ++vertexIndex)
             {
-                int vertexZone = GetVertexPositionBetweenPlanes(
-                    riggedSlice.Slice.Mesh.Vertices[vertexIndex].Position, riggingPlanes
-                );
+                Vector3 vertexPosition = riggedSlice.Slice.Mesh.Vertices[vertexIndex].Position;
+                int vertexZone = GetVertexPositionBetweenPlanes(vertexPosition, riggingPlanes);
                 riggedSlice.RiggingZonesIndices[vertexZone].Add(vertexIndex);
 
                 if (vertexIndex % 150 == 0)
@@ -64,7 +63,7 @@ namespace PopcornGenerator
             }
         }
 
-        // TODO: Array of planes is sorted by y coordinate, use binary search
+        // TODO: Array of planes is sorted by y coordinate. Binary search could be used
         private static int GetVertexPositionBetweenPlanes(Vector3 position, Plane[] riggingPlanes)
         {
             if (!IsAbovePlane(position, riggingPlanes[0]))
@@ -103,13 +102,31 @@ namespace PopcornGenerator
             }
         }
 
+
         private static Vector3 CalculateRiggingZoneBonePosition(RiggedSlice riggedSlice, int zoneIndex)
         {
             IList<Vertex> meshVertices = riggedSlice.Slice.Mesh.Vertices;
-            IList<Triangle> meshTriangles = riggedSlice.Slice.Mesh.Triangles;
+            ISet<int> zoneIndices = CalculateRiggingZoneKernelSubmeshIndices(riggedSlice, zoneIndex);
+
+            Vector3 zoneCenter = CalculateZoneCenter(meshVertices, zoneIndices);
+            Vector3 zoneMeanNormal = CalculateZoneMeanNormal(riggedSlice, meshVertices, zoneIndices);
+            Quaternion zoneVerticesRotation = CalculateZoneVerticesRotation(zoneMeanNormal);
+            Bounds zoneBounds = CalculateZoneBounds(meshVertices, zoneIndices, zoneCenter, zoneMeanNormal, zoneVerticesRotation);
+            Vector3 referencePosition = CalculateZoneReferencePosition(zoneIndex, zoneBounds);
+            int closestVertexIndex = CalculateClosestVertexToReference(meshVertices, zoneIndices, zoneCenter, zoneMeanNormal,
+                                                                       zoneVerticesRotation, referencePosition);
+
+            return meshVertices[closestVertexIndex].Position;
+        }
+
+#if false
+        private static Vector3 CalculateRiggingZoneBonePosition_backup(RiggedSlice riggedSlice, int zoneIndex)
+        {
+            IList<Vertex> meshVertices = riggedSlice.Slice.Mesh.Vertices;
+            IList<Triangle> meshTriangles = riggedSlice.Slice.Mesh.SubMeshTriangles[Mesh.kernelSubmeshIndex];
 
             // Create copy of vertices
-            IList<int> zoneIndices = riggedSlice.RiggingZonesIndices[zoneIndex];
+            ISet<int> zoneIndices = riggedSlice.RiggingZonesIndices[zoneIndex];
             IList<Vector3> vertices = new List<Vector3>(); //new Vector3[zoneIndices.Count];
             for (int vertexIndex = 0; vertexIndex < zoneIndices.Count; ++vertexIndex)
             {
@@ -130,9 +147,9 @@ namespace PopcornGenerator
                 Triangle t = meshTriangles[triangleIndex];
                 if (indicesHashSet.Contains(t.I0) && indicesHashSet.Contains(t.I1) && indicesHashSet.Contains(t.I2)
                     // TODO ignore puffed vertices because we set the uv coordinates to 0 when we create those
-                    && meshVertices[t.I0].UV != Vector2.zero
-                    && meshVertices[t.I1].UV != Vector2.zero
-                    && meshVertices[t.I2].UV != Vector2.zero
+                    //&& meshVertices[t.I0].UV != Vector2.zero
+                    //&& meshVertices[t.I1].UV != Vector2.zero
+                    //&& meshVertices[t.I2].UV != Vector2.zero
                 )
                 {
                     triangles.Add(t);
@@ -207,7 +224,7 @@ namespace PopcornGenerator
             }
             return meshVertices[closestVertexIndex].Position;
 
-            #if false
+#if false
             // TODO use a mesh parametrisation instead of uv coordinates
             if (!riggedSlice.Slice.Mesh.HasUVs)
             {
@@ -240,88 +257,250 @@ namespace PopcornGenerator
             }
 
             return riggedSlice.Slice.Mesh.Vertices[closestIndex].Position;
-            #endif
+#endif
         }
+#endif
+        private static ISet<int> CalculateRiggingZoneKernelSubmeshIndices(RiggedSlice riggedSlice, int zoneIndex)
+        {
+            var indices = new HashSet<int>();
+            var riggingZoneIndices = riggedSlice.RiggingZonesIndices[zoneIndex];
+            var kernelSubmeshTriangles = riggedSlice.Slice.Mesh.SubMeshTriangles[Mesh.kernelSubmeshIndex];
+
+            void AddIndexIfInRiggingSlice(int index)
+            {
+                if (riggingZoneIndices.Contains(index))
+                {
+                    indices.Add(index);
+                }
+            }
+
+            foreach (Triangle t in kernelSubmeshTriangles)
+            {
+                AddIndexIfInRiggingSlice(t.I0);
+                AddIndexIfInRiggingSlice(t.I1);
+                AddIndexIfInRiggingSlice(t.I2);
+            }
+
+            return indices;
+        }
+
+        private static IList<Vector3> CalculateRiggingZoneKernelSubmeshVertices(RiggedSlice riggedSlice, ISet<int> indices)
+        {
+            var vertices = new List<Vector3>(indices.Count);
+            var sliceVertices = riggedSlice.Slice.Mesh.Vertices;
+
+            foreach (int index in indices)
+            {
+                vertices.Add(sliceVertices[index].Position);
+            }
+
+            return vertices;
+        }
+
+        private static IList<Triangle> CalculateRiggignZoneKernelSubmeshTriangles(RiggedSlice riggedSlice, ISet<int> indices)
+        {
+            var triangles = new List<Triangle>();
+            var kernelSubmeshTriangles = riggedSlice.Slice.Mesh.SubMeshTriangles[Mesh.kernelSubmeshIndex];
+
+            foreach (Triangle t in kernelSubmeshTriangles)
+            {
+                if (indices.Contains(t.I0) && indices.Contains(t.I1) && indices.Contains(t.I2))
+                {
+                    triangles.Add(t);
+                }
+            }
+
+            return triangles;
+        }
+
+        private static Vector3 CalculateZoneCenter(IList<Vertex> meshVertices, ISet<int> zoneIndices)
+        {
+            Vector3 zoneCenter = Vector3.zero;
+            foreach (int index in zoneIndices)
+            {
+                zoneCenter += meshVertices[index].Position;
+            }
+            zoneCenter /= zoneIndices.Count;
+            return zoneCenter;
+        }
+
+        private static Vector3 CalculateZoneMeanNormal(RiggedSlice riggedSlice, IList<Vertex> meshVertices, ISet<int> zoneIndices)
+        {
+            Vector3 meanNormal = Vector3.zero;
+            var kernelSubmeshTriangles = riggedSlice.Slice.Mesh.SubMeshTriangles[Mesh.kernelSubmeshIndex];
+
+            foreach (Triangle t in kernelSubmeshTriangles)
+            {
+                bool isTriangleInZone = (zoneIndices.Contains(t.I0) && zoneIndices.Contains(t.I1) && zoneIndices.Contains(t.I2));
+                if (isTriangleInZone)
+                {
+                    Vector3 v0 = meshVertices[t.I0].Position;
+                    Vector3 v1 = meshVertices[t.I1].Position;
+                    Vector3 v2 = meshVertices[t.I2].Position;
+
+                    meanNormal += Vector3.Cross(v1 - v0, v2 - v0);
+                }
+            }
+            meanNormal.Normalize();
+            return meanNormal;
+        }
+
+        private static Quaternion CalculateZoneVerticesRotation(Vector3 zoneMeanNormal)
+        {
+            Vector3 closestDirection = Vector3.Angle(zoneMeanNormal, Vector3.forward) < Vector3.Angle(zoneMeanNormal, Vector3.back)
+                                       ? Vector3.forward : Vector3.back;
+            Quaternion verticesRotation = Quaternion.FromToRotation(zoneMeanNormal, closestDirection);
+            return verticesRotation;
+        }
+
+        private static Bounds CalculateZoneBounds(IList<Vertex> meshVertices, ISet<int> zoneIndices, Vector3 zoneCenter,
+                                                  Vector3 zoneMeanNormal, Quaternion verticesRotation)
+        {
+            var bounds = new Bounds();
+            foreach (int index in zoneIndices)
+            {
+                Vector3 vertex = GetVertexProjectedOnXoYPlane(meshVertices, zoneCenter, zoneMeanNormal,
+                                                              verticesRotation, index);
+                bounds.Encapsulate(vertex);
+            }
+
+            return bounds;
+        }
+
+        private static Vector3 GetVertexProjectedOnXoYPlane(IList<Vertex> meshVertices, Vector3 zoneCenter,
+                                                            Vector3 zoneMeanNormal, Quaternion zoneVerticesRotation, int index)
+        {
+            Vector3 vertex = meshVertices[index].Position;
+            vertex -= zoneCenter; // Translate vertex to origin
+            vertex = Vector3.ProjectOnPlane(vertex, zoneMeanNormal); // Project vertex on plane
+            vertex = zoneVerticesRotation * vertex; // Rotate vertex
+            return vertex;
+        }
+
+        private static Vector3 CalculateZoneReferencePosition(int zoneIndex, Bounds zoneBounds)
+        {
+            return new Vector3(zoneBounds.center.x,
+                               (zoneIndex == 0) ? zoneBounds.center.y : zoneBounds.min.y,
+                               zoneBounds.center.z);
+        }
+
+        private static int CalculateClosestVertexToReference(IList<Vertex> meshVertices, ISet<int> zoneIndices,
+                                                             Vector3 zoneCenter, Vector3 zoneMeanNormal,
+                                                             Quaternion zoneVerticesRotation, Vector3 referencePosition)
+        {
+            float sqrMinDistance = float.MaxValue;
+            int closestVertexIndex = -1;
+            foreach (int index in zoneIndices)
+            {
+                Vector3 vertex = GetVertexProjectedOnXoYPlane(meshVertices, zoneCenter, zoneMeanNormal,
+                                                              zoneVerticesRotation, index);
+
+                float sqrDistance = (vertex - referencePosition).sqrMagnitude;
+                if (sqrDistance < sqrMinDistance)
+                {
+                    sqrMinDistance = sqrDistance;
+                    closestVertexIndex = index;
+                }
+            }
+
+            return closestVertexIndex;
+        }
+
+
 
         // TODO use smoothing
         private static IEnumerator CalculateRiggingZonesBoneWeights(RiggedSlice riggedSlice)
         {
+            //Debug.Log($"riggedSlice.RiggingZonesIndices.Count: {riggedSlice.RiggingZonesIndices.Count}, riggedSlice.BonePositions.Length: {riggedSlice.BonePositions.Length}");
             for (int riggingZoneIndex = 0; riggingZoneIndex < riggedSlice.RiggingZonesIndices.Count; ++riggingZoneIndex)
             {
                 foreach (int vertexIndex in riggedSlice.RiggingZonesIndices[riggingZoneIndex])
                 {
-                    #if true
+                 #if true
                     riggedSlice.BoneWeights[vertexIndex] = new BoneWeight()
                     {
                         boneIndex0 = riggingZoneIndex,
                         weight0 = 1.0f
                     };
-                    #endif
+                 #else
 
-                    #if false
+                    if (vertexIndex == 500)
+                    {
+                    }
+
                     Vector3 vertexPosition = riggedSlice.Slice.Mesh.Vertices[vertexIndex].Position;
 
                     // Find closest 4 bones
-                    int[] minIndices = new int[4] { -1, -1, -1, -1};
-                    float[] minSqrDist = new float[4] { float.MaxValue, float.MaxValue, float.MaxValue, float.MaxValue };
+                    // TODO use stack
+                    int minIndex0 = -1, minIndex1 = -1, minIndex2 = -1;//, minIndex3 = -1;
+                    float minSqrDist0 = float.MaxValue, minSqrDist1 = float.MaxValue;
+                    float minSqrDist2 = float.MaxValue;//, minSqrDist3 = float.MaxValue;
 
                     for (int boneIndex = 0; boneIndex < riggedSlice.BonePositions.Length; ++boneIndex)
                     {
                         Vector3 bonePosition = riggedSlice.BonePositions[boneIndex];
                         float sqrDist = (vertexPosition - bonePosition).sqrMagnitude;
 
-                        if (sqrDist < minSqrDist[0])
+                        if (sqrDist < minSqrDist0)
                         {
-                            minSqrDist[3] = minSqrDist[2];
-                            minSqrDist[2] = minSqrDist[1];
-                            minSqrDist[1] = minSqrDist[0];
-                            minSqrDist[0] = sqrDist;
+                            //minSqrDist3 = minSqrDist2;
+                            minSqrDist2 = minSqrDist1;
+                            minSqrDist1 = minSqrDist0;
+                            minSqrDist0 = sqrDist;
 
-                            minIndices[3] = minIndices[2];
-                            minIndices[2] = minIndices[1];
-                            minIndices[1] = minIndices[0];
-                            minIndices[0] = boneIndex;
+                            //minIndex3 = minIndex2;
+                            minIndex2 = minIndex1;
+                            minIndex1 = minIndex0;
+                            minIndex0 = boneIndex;
                         }
-                        else if (sqrDist < minSqrDist[1])
+                        else if (sqrDist < minSqrDist1)
                         {
-                            minSqrDist[3] = minSqrDist[2];
-                            minSqrDist[2] = minSqrDist[1];
-                            minSqrDist[1] = sqrDist;
+                            //minSqrDist3 = minSqrDist2;
+                            minSqrDist2 = minSqrDist1;
+                            minSqrDist1 = sqrDist;
 
-                            minIndices[3] = minIndices[2];
-                            minIndices[2] = minIndices[1];
-                            minIndices[1] = boneIndex;
+                            //minIndex3 = minIndex2;
+                            minIndex2 = minIndex1;
+                            minIndex1 = boneIndex;
                         }
-                        else if (sqrDist < minSqrDist[2])
+                        else// if (sqrDist < minSqrDist2)
                         {
-                            minSqrDist[3] = minSqrDist[2];
-                            minSqrDist[2] = sqrDist;
+                            //minSqrDist3 = minSqrDist2;
+                            minSqrDist2 = sqrDist;
 
-                            minIndices[3] = minIndices[2];
-                            minIndices[2] = boneIndex;
-                        }
+                            //minIndex3 = minIndex2;
+                            minIndex2 = boneIndex;
+                        }/*
                         else
                         {
-                            minSqrDist[3] = sqrDist;
+                            minSqrDist3 = sqrDist;
 
-                            minIndices[3] = boneIndex;
-                        }
+                            minIndex3 = boneIndex;
+                        }*/
                     }
 
-                    float totalDist = minSqrDist[0] + minSqrDist[1] + minSqrDist[2] + minSqrDist[3];
+                    float totalDist = minSqrDist0 + minSqrDist1 + minSqrDist2;// + minSqrDist3;
 
-                    riggedSlice.BoneWeights[vertexIndex] = new BoneWeight()
+                    BoneWeight boneWeight = new BoneWeight()
                     {
-                        boneIndex0 = minIndices[0],
-                        weight0 = 1.0f - minSqrDist[0] / totalDist,
-                        boneIndex1 = minIndices[1],
-                        weight1 = 1.0f - minSqrDist[1] / totalDist,
-                        boneIndex2 = minIndices[2],
-                        weight2 = 1.0f - minSqrDist[2] / totalDist,
-                        boneIndex3 = minIndices[3],
-                        weight3 = 1.0f - minSqrDist[3] / totalDist,
+                        boneIndex0 = minIndex0,
+                        weight0 = (1.0F - minSqrDist0 / totalDist),
+                        boneIndex1 = minIndex1,
+                        weight1 = (1.0F - minSqrDist1 / totalDist),
+                        boneIndex2 = minIndex2,
+                        weight2 = (1.0F - minSqrDist2 / totalDist),
+                        //boneIndex3 = minIndex3,
+                        //weight3 = minSqrDist3 / totalDist,
                     };
-                    #endif
+
+                    riggedSlice.BoneWeights[vertexIndex] = boneWeight;
+
+                    if (vertexIndex == 500)
+                    {
+                        Debug.Log($"Bone weights sum1: {boneWeight.weight0 + boneWeight.weight1 + boneWeight.weight2 + boneWeight.weight3:F5}");
+                        Debug.Log($"Bone weights sum2: {minSqrDist0 / totalDist + minSqrDist1 / totalDist + minSqrDist2 / totalDist /*+ minSqrDist3 / totalDist*/:F5}");
+                    }
+                #endif
                 }
                 yield return null;
             }

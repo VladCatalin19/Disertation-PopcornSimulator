@@ -10,9 +10,11 @@ namespace PopcornGenerator
 {
     internal static class MeshProcessing
     {
-        public static IEnumerator RiggedSlicesToSkinnedMeshRenderers(
-            IList<RiggedSlice> riggedSlices, Transform kernelTransform, MeshRenderer kernelMeshRenderer,
-            IList<SkinnedMeshRenderer> skinnedMeshRenderers
+        public static IEnumerator RiggedSlicesToSkinnedMeshRenderers(IList<RiggedSlice> riggedSlices,
+                                                                     Transform kernelTransform,
+                                                                     MeshRenderer kernelMeshRenderer,
+                                                                     Material puffMaterial,
+                                                                     IList<SkinnedMeshRenderer> skinnedMeshRenderers
         )
         {
             for (int riggedSliceIndex = 0; riggedSliceIndex < riggedSlices.Count; ++riggedSliceIndex)
@@ -31,7 +33,7 @@ namespace PopcornGenerator
 
                 UnityEngine.Mesh unityMesh = CreateUnityMesh(riggedSlice, riggedSliceIndex, kernelTransform, bones);
                 AddMeshFilterToSliceGO(sliceGO, unityMesh);
-                var skm = AddSkinnedMeshRendererToSliceGO(sliceGO, unityMesh, kernelMeshRenderer.material, bones);
+                var skm = AddSkinnedMeshRendererToSliceGO(sliceGO, unityMesh, kernelMeshRenderer.material, puffMaterial, bones);
                 skinnedMeshRenderers.Add(skm);
 
                 //unityMesh.RecalculateNormals();
@@ -105,13 +107,15 @@ namespace PopcornGenerator
             return sliceMeshFilter;
         }
 
-        private static SkinnedMeshRenderer AddSkinnedMeshRendererToSliceGO(
-            GameObject sliceGO, UnityEngine.Mesh unityMesh, Material material, Transform[] bones
-        )
+        private static SkinnedMeshRenderer AddSkinnedMeshRendererToSliceGO(GameObject sliceGO,
+                                                                           UnityEngine.Mesh unityMesh,
+                                                                           Material kernelMaterial,
+                                                                           Material puffMaterial,
+                                                                           Transform[] bones)
         {
             SkinnedMeshRenderer sliceSkinnedMeshRenderer = sliceGO.AddComponent<SkinnedMeshRenderer>();
             sliceSkinnedMeshRenderer.sharedMesh = unityMesh;
-            sliceSkinnedMeshRenderer.material = material;
+            sliceSkinnedMeshRenderer.materials = new Material[] { kernelMaterial, puffMaterial };
             sliceSkinnedMeshRenderer.rootBone = bones[0];
             sliceSkinnedMeshRenderer.bones = bones;
             return sliceSkinnedMeshRenderer;

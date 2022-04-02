@@ -432,6 +432,7 @@ MonoBehaviour:
   kernelCollider: {fileID: 618848279637546613}
   cuttingPlanesParent: {fileID: 1847431739481237319}
   riggingPlanesParent: {fileID: 1847431741107936423}
+  puffMaterialPrefab: {fileID: 2100000, guid: 6b3fc3c3de5a281428ee9705adfe500d, type: 2}
   onKernelExpansion:
     m_PersistentCalls:
       m_Calls:

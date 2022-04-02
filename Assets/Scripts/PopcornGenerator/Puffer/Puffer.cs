@@ -24,15 +24,16 @@ namespace PopcornGenerator
             {
                 yield return null;
 
-                IList<Vertex> vertices = slices[sliceIndex].Mesh.Vertices;
-                IList<Triangle> triangles = slices[sliceIndex].Mesh.Triangles;
+                IList<Vertex> kernelvertices = slices[sliceIndex].Mesh.Vertices;
+                IList<Triangle> kerneltriangles = slices[sliceIndex].Mesh.SubMeshTriangles[Mesh.kernelSubmeshIndex];
                 Border border = slices[sliceIndex].Border;
+
                 yield return null;
 
-                var (firstCurveIndices, secondCurveIndices) = GetCurvesIndices(vertices, border);
+                var (firstCurveIndices, secondCurveIndices) = GetCurvesIndices(kernelvertices, border);
                 yield return null;
 
-#               if false
+#               if DEBUG && false
                     CreateCubesOnBorders(slices, sliceIndex, firstCurveIndices, secondCurveIndices);
 #               endif
 
@@ -40,11 +41,30 @@ namespace PopcornGenerator
                     PrintCurvesIndicesIfSecondHasLessThan5Indices(firstCurveIndices, secondCurveIndices);
 #               endif
 
-                yield return null;
-                int[,] interpolatedVertices = GeneratePuffVertices(vertices, firstCurveIndices, secondCurveIndices);
+                int segments = Mathf.Min(firstCurveIndices.Count, secondCurveIndices.Count) - 2;
+                int verticesPerSegment = 22;
 
                 yield return null;
-                GeneratePuffTriangles(vertices, triangles, firstCurveIndices, secondCurveIndices, interpolatedVertices);
+                IList<Vertex> puffVertices = GeneratePuffVertices(kernelvertices, segments, verticesPerSegment,
+                                                                  firstCurveIndices, secondCurveIndices);
+                yield return null;
+                IList<Triangle> puffTriangles = GeneratePuffTriangles(kernelvertices, segments, verticesPerSegment,
+                                                                      puffVertices);
+
+                //yield return null;
+                //RecalculateNormals(puffVertices, puffTriangles);
+
+                yield return null;
+                GenerateUVCoordinates(puffVertices);
+
+                yield return null;
+                FlipTrianglesIfFacingInwards(kernelvertices, puffVertices, puffTriangles);
+
+                yield return null;
+                AddBaseIndexToTriangleIndices(puffTriangles, kernelvertices.Count);
+
+                yield return null;
+                AddVerticesAndTrianglesToMesh(puffVertices, puffTriangles, slices[sliceIndex].Mesh);
             }
         }
 
@@ -184,14 +204,19 @@ namespace PopcornGenerator
             return (firstCurveIndices, secondCurveIndices);
         }
 
-        private static int[,] GeneratePuffVertices(IList<Vertex> vertices, IList<int> firstCurveIndices, IList<int> secondCurveIndices)
+        private static IList<Vertex> GeneratePuffVertices(IList<Vertex> vertices,
+                                                          int segments,
+                                                          int verticesPerSegment,
+                                                          IList<int> firstCurveIndices,
+                                                          IList<int> secondCurveIndices)
         {
-            int verticesPerSegment = 20;
             float dirPercent = 0.9f;
             float dirMaxMagniture = 3.0f;
-            int[,] interpolatedVertices = new int[Mathf.Min(firstCurveIndices.Count, secondCurveIndices.Count) - 2, verticesPerSegment];
 
-            for (int lineIndex = 0; lineIndex < interpolatedVertices.GetLength(0); ++lineIndex)
+            //int[,] interpolatedVertices = new int[segments, verticesPerSegment];
+            IList<Vertex> puffVertices = new List<Vertex>(segments * verticesPerSegment);
+
+            for (int lineIndex = 0; lineIndex < segments; ++lineIndex)
             {
                 Vertex v0 = vertices[firstCurveIndices[lineIndex + 1]];
                 Vertex v1 = vertices[secondCurveIndices[lineIndex + 1]];
@@ -199,13 +224,15 @@ namespace PopcornGenerator
                 Vector3 dir = v1.Position - v0.Position;
                 //Debug.Log($"Slice {sliceIndex} dir.magnitude: {dir.magnitude}");
 
-                Vector3 dirToLook = -(Vector3.Lerp(v0.Normal.Value, v1.Normal.Value, 0.5f)).normalized;//Vector3.Cross(dir.normalized, Vector3.up);//
-                float lineT = (float)lineIndex / (interpolatedVertices.GetLength(0) - 1);
+                Vector3 dirToLook = -Vector3.Lerp(v0.Normal.Value, v1.Normal.Value, 0.5f).normalized;//Vector3.Cross(dir.normalized, Vector3.up);//
+                float lineT = (float)lineIndex / (segments - 1);
                 //Quaternion q = Quaternion.FromToRotation(Vector3.up, dirToLook);
 
-                for (int iteration = 0; iteration < verticesPerSegment; ++iteration)
+                puffVertices.Add(v0);
+
+                for (int iteration = 0; iteration < verticesPerSegment - 2; ++iteration)
                 {
-                    float t = (float)iteration / (verticesPerSegment - 1);
+                    float t = (float)iteration / (verticesPerSegment - 3);
 
                     float angle = t * Mathf.PI;
 
@@ -213,12 +240,13 @@ namespace PopcornGenerator
                     float positionT = Mathf.LerpUnclamped(curve.Evaluate(t), t, lineT);
                     vInterp.Position = Vector3.LerpUnclamped(v0.Position, v1.Position, positionT)
                         + (Mathf.Sin(angle) + 0.0f) * Mathf.Min(dir.magnitude, dirMaxMagniture) * dirPercent * dirToLook;
-                    vInterp.UV = Vector2.zero;
 
-                    interpolatedVertices[lineIndex, iteration] = vertices.Count;
+                    //interpolatedVertices[lineIndex, iteration] = vertices.Count;
 
-                    vertices.Add(vInterp);
+                    puffVertices.Add(vInterp);
                 }
+
+                puffVertices.Add(v1);
 
 #if false
                     interpolatedVertices[interpolatedIndex] = Vertex.Lerp(
@@ -236,25 +264,77 @@ namespace PopcornGenerator
 #endif
             }
 
-            return interpolatedVertices;
+            return puffVertices;
         }
 
-        private static void GeneratePuffTriangles(IList<Vertex> vertices, IList<Triangle> triangles,
-                                                  IList<int> firstCurveIndices, IList<int> secondCurveIndices,
-                                                  int[,] interpolatedVertices)
+        private static bool ShouldFlipTriangle(Vector3 v0, Vector3 v1, Vector3 v2, Vector3 meanNormal)
         {
-            for (int lineIndex = 0; lineIndex < interpolatedVertices.GetLength(0) - 1; ++lineIndex)
+            Vector3 normal = Vector3.Cross(v1 - v0, v2 - v0).normalized;
+            return Vector3.Angle(normal, meanNormal) > 90.0F;
+        }
+
+        private static IList<Triangle> GeneratePuffTriangles(IList<Vertex> vertices,
+                                                             int segments,
+                                                             int verticesPerSegment,
+                                                             IList<Vertex> puffVertices)
+        {
+            int trianglesNumber = (segments - 1) * (verticesPerSegment - 1) * 2;
+            IList<Triangle> puffTriangles = new List<Triangle>(trianglesNumber);
+
+            for (int lineIndex = 0; lineIndex < segments - 1; ++lineIndex)
             {
-                // v0 vInterp0 vInterp1  vInterpn-1  v1
-                // x-----x-----x               x-----x  Line 0
+                // v10  v11   v12            v1n-1  v1n 
+                // x-----x-----x               x-----x  Line 1
                 // |\    |\    |               |\    |
                 // | \   | \   |               | \   |
                 // |  \  |  \  |  ..... .....  |  \  | 
                 // |   \ |   \ |               |   \ |
                 // |    \|    \|               |    \|
-                // x-----x-----x               x-----x  Line 1
-                // v0 vInterp0 vInterp1  vInterpn-1  v1
+                // x-----x-----x               x-----x  Line 0
+                // v00  v01   v02            v0n-1  v0n
 
+                //Vector3 v0Normal = puffVertices[lineIndex * verticesPerSegment].Normal.Value;
+                //Vector3 vnNormal = puffVertices[(lineIndex + 1) * verticesPerSegment - 1].Normal.Value;;
+                //Vector3 meanNormal = -Vector3.Lerp(v0Normal, vnNormal, 0.5f).normalized;
+
+                for (int vertexIndex = 0; vertexIndex < verticesPerSegment - 1; ++vertexIndex)
+                {
+                    int i00 = lineIndex * verticesPerSegment + vertexIndex;
+                    int i01 = lineIndex * verticesPerSegment + vertexIndex + 1;
+
+                    int i10 = (lineIndex + 1) * verticesPerSegment + vertexIndex;
+                    int i11 = (lineIndex + 1) * verticesPerSegment + vertexIndex + 1;
+
+                    //Vector3 v00 = puffVertices[i00].Position;
+                    //Vector3 v01 = puffVertices[i01].Position;
+                    //Vector3 v10 = puffVertices[i10].Position;
+                    //Vector3 v11 = puffVertices[i11].Position;
+
+                    puffTriangles.Add(new Triangle(i00, i10, i01));
+                    puffTriangles.Add(new Triangle(i10, i11, i01));
+
+                    #if false && false && false
+                    if (ShouldFlipTriangle(v00, v10, v01, meanNormal))
+                    {
+                        puffTriangles.Add(new Triangle(i00, i01, i10));
+                    }
+                    else
+                    {
+                        puffTriangles.Add(new Triangle(i00, i10, i01));
+                    }
+
+                    if (ShouldFlipTriangle(v10, v11, v01, meanNormal))
+                    {
+                        puffTriangles.Add(new Triangle(i10, i01, i11));
+                    }
+                    else
+                    {
+                        puffTriangles.Add(new Triangle(i10, i11, i01));
+                    }
+                    #endif
+                }
+
+#if false && false
                 int iLine0V0 = firstCurveIndices[lineIndex + 1];
                 int iLine0VInterp = interpolatedVertices[lineIndex, 0];
 
@@ -333,7 +413,108 @@ namespace PopcornGenerator
 
                 triangles.Add(new Triangle(iLine0VInterpEnd, iLine1VInterpEnd, iLine1V1));
                 triangles.Add(new Triangle(iLine0VInterpEnd, iLine1V1, iLine0V1));
+#endif
             }
+            return puffTriangles;
+        }
+
+        // https://computergraphics.stackexchange.com/a/4032 - Smooth shading normals
+        private static void RecalculateNormals(IList<Vertex> vertices, IList<Triangle> triangles)
+        {
+            for (int vertexIndex = 0; vertexIndex < vertices.Count; ++vertexIndex)
+            {
+                Vertex v = vertices[vertexIndex];
+                v.Normal = Vector3.zero;
+                vertices[vertexIndex] = v;
+            }
+
+            foreach (Triangle triangle in triangles)
+            {
+                int i0 = triangle.I0;
+                int i1 = triangle.I1;
+                int i2 = triangle.I2;
+
+                Vertex v0 = vertices[i0];
+                Vertex v1 = vertices[i1];
+                Vertex v2 = vertices[i2];
+
+                Vector3 normal = Vector3.Cross(v1.Position - v0.Position, v2.Position - v0.Position).normalized;
+                v0.Normal = normal;
+                v1.Normal = normal;
+                v2.Normal = normal;
+
+                vertices[i0] = v0;
+                vertices[i1] = v1;
+                vertices[i2] = v2;
+            }
+
+            for (int vertexIndex = 0; vertexIndex < vertices.Count; ++vertexIndex)
+            {
+                Vertex v = vertices[vertexIndex];
+                v.Normal = v.Normal.Value.normalized;
+                vertices[vertexIndex] = v;
+            }
+        }
+
+        private static void GenerateUVCoordinates(IList<Vertex> puffVertices)
+        {
+            Debug.LogWarning($"Puff UV's not implemented.");
+        }
+
+        private static void FlipTrianglesIfFacingInwards(IList<Vertex> kernelVertices, IList<Vertex> puffVertices,
+                                                         IList<Triangle> puffTriangles)
+        {
+            Vector3 meanKernelNormal = Vector3.zero;
+            foreach (Vertex v in kernelVertices)
+            {
+                meanKernelNormal += v.Normal.Value;
+            }
+            meanKernelNormal.Normalize();
+
+            Vector3 meanPuffNormal = Vector3.zero;
+            foreach (Triangle t in puffTriangles)
+            {
+                Vector3 v0 = puffVertices[t.I0].Position;
+                Vector3 v1 = puffVertices[t.I1].Position;
+                Vector3 v2 = puffVertices[t.I2].Position;
+
+                meanPuffNormal += Vector3.Cross(v1 - v0, v2 - v0);
+            }
+            meanPuffNormal.Normalize();
+
+            if (Vector3.Angle(meanKernelNormal, meanPuffNormal) < 90.0F)
+            {
+                // Flip triangles
+                for (int triangleIndex = 0; triangleIndex < puffTriangles.Count; ++triangleIndex)
+                {
+                    Triangle triangle = puffTriangles[triangleIndex];
+                    Triangle newTriangle = new Triangle(triangle.I0, triangle.I2, triangle.I1);
+                    puffTriangles[triangleIndex] = newTriangle;
+                }
+            }
+        }
+
+        private static void AddBaseIndexToTriangleIndices(IList<Triangle> triangles, int baseIndex)
+        {
+            for (int triangleIndex = 0; triangleIndex < triangles.Count; ++triangleIndex)
+            {
+                Triangle triangle = triangles[triangleIndex];
+                Triangle newTriangle = new Triangle(triangle.I0 + baseIndex,
+                                                    triangle.I1 + baseIndex,
+                                                    triangle.I2 + baseIndex);
+                triangles[triangleIndex] = newTriangle;
+            }
+        }
+
+        private static void AddVerticesAndTrianglesToMesh(IList<Vertex> vertices,
+                                                          IList<Triangle> triangles,
+                                                          Mesh mesh)
+        {
+            foreach (Vertex vertex in vertices)
+            {
+                mesh.Vertices.Add(vertex);
+            }
+            mesh.SubMeshTriangles.Add(triangles);
         }
     }
 }

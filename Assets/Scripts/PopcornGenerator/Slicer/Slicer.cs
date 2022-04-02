@@ -102,7 +102,7 @@ namespace PopcornGenerator
             if (cuttingPlanes.Count == 1)
             {
                 Debug.LogWarning("Slicer -> SetMeshesBorderIndices: " +
-                    "Number of cutting planes is 1. Will not set intersecting planes indices");
+                                 "Number of cutting planes is 1. Will not set intersecting planes indices");
             }
 
             for (int sliceIndex = 0; sliceIndex < resultingSlices.Count; ++sliceIndex)
@@ -135,10 +135,10 @@ namespace PopcornGenerator
 
         private static IEnumerator SliceSlice(Slice slice, Plane cuttingPlane, TwoSliceBuildingsWrapper twoSliceWrappers)
         {
-            //foreach (Triangle triangle in slice.Mesh.Triangles)
-            for (int triangle_index = 0; triangle_index < slice.Mesh.Triangles.Count; ++triangle_index)
+            //foreach (Triangle triangle in slice.Mesh.SubMeshTriangles[Mesh.kernelSubmeshIndex])
+            for (int triangle_index = 0; triangle_index < slice.Mesh.SubMeshTriangles[Mesh.kernelSubmeshIndex].Count; ++triangle_index)
             {
-                Triangle triangle = slice.Mesh.Triangles[triangle_index];
+                Triangle triangle = slice.Mesh.SubMeshTriangles[Mesh.kernelSubmeshIndex][triangle_index];
                 SlicerTriangleWrapper triangleWrapper = new SlicerTriangleWrapper(
                     triangle,
                     slice.Mesh.Vertices[triangle.I0],
@@ -227,7 +227,7 @@ namespace PopcornGenerator
             int i1 = wrapper.GetVertexIndex(triangleWrapper.V1.I, triangleWrapper.V1.V);
             int i2 = wrapper.GetVertexIndex(triangleWrapper.V2.I, triangleWrapper.V2.V);
 
-            wrapper.Slice.Mesh.Triangles.Add(new Triangle(i0, i1, i2));
+            wrapper.Slice.Mesh.SubMeshTriangles[Mesh.kernelSubmeshIndex].Add(new Triangle(i0, i1, i2));
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -266,9 +266,9 @@ namespace PopcornGenerator
             int iBelowSideOfVBelow = wrapperSideOfVBelow.GetVertexIndex(triangleWrapper.VBelow.I,
                                                                         triangleWrapper.VBelow.V);
 
-            wrapperSideOfVAbove.Slice.Mesh.Triangles.Add(new Triangle(iAboveSideOfVAbove, iInterpSideOfVAbove,
+            wrapperSideOfVAbove.Slice.Mesh.SubMeshTriangles[Mesh.kernelSubmeshIndex].Add(new Triangle(iAboveSideOfVAbove, iInterpSideOfVAbove,
                                                                       iOnPlaneSideOfVAbove));
-            wrapperSideOfVBelow.Slice.Mesh.Triangles.Add(new Triangle(iOnPlaneSideOfVBelow, iInterpSideOfVBelow,
+            wrapperSideOfVBelow.Slice.Mesh.SubMeshTriangles[Mesh.kernelSubmeshIndex].Add(new Triangle(iOnPlaneSideOfVBelow, iInterpSideOfVBelow,
                                                                       iBelowSideOfVBelow));
         }
 
@@ -310,13 +310,13 @@ namespace PopcornGenerator
                                                                                          triangleWrapper.VBelowLeft.I,
                                                                                          vInterpLeft);
 
-            wrapperSideOfVAbove.Slice.Mesh.Triangles.Add(new Triangle(iAboveSideOfVAbove,
+            wrapperSideOfVAbove.Slice.Mesh.SubMeshTriangles[Mesh.kernelSubmeshIndex].Add(new Triangle(iAboveSideOfVAbove,
                                                                       iInterpRightSideOfVAbove,
                                                                       iInterpLeftSideOfVAbove));
-            wrapperSideOfVBelow.Slice.Mesh.Triangles.Add(new Triangle(iBelowRightSideOfVBelow,
+            wrapperSideOfVBelow.Slice.Mesh.SubMeshTriangles[Mesh.kernelSubmeshIndex].Add(new Triangle(iBelowRightSideOfVBelow,
                                                                       iInterpLeftSideOfVBelow,
                                                                       iInterpRightSideOfVBelow));
-            wrapperSideOfVBelow.Slice.Mesh.Triangles.Add(new Triangle(iBelowRightSideOfVBelow,
+            wrapperSideOfVBelow.Slice.Mesh.SubMeshTriangles[Mesh.kernelSubmeshIndex].Add(new Triangle(iBelowRightSideOfVBelow,
                                                                       iInterpRightSideOfVBelow,
                                                                       iBelowLeftSideOfVBelow));
         }
@@ -414,8 +414,8 @@ namespace PopcornGenerator
                 int i12SideOfV2 = wrapperSideOfV2.GetInterpolatedVertexIndex(triangleWrapper.I1, triangleWrapper.I2, v12);
                 int i2SideOfV2 = wrapperSideOfV2.GetVertexIndex(triangleWrapper.I2, triangleWrapper.V2);
 
-                wrapperSideOfV1.Slice.Mesh.Triangles.Add(new Triangle(i1SideOfV1, i12SideOfV1, i0SideOfV1));
-                wrapperSideOfV2.Slice.Mesh.Triangles.Add(new Triangle(i0SideOfV2, i12SideOfV2, i2SideOfV2));
+                wrapperSideOfV1.Slice.Mesh.SubMeshTriangles[Mesh.kernelSubmeshIndex].Add(new Triangle(i1SideOfV1, i12SideOfV1, i0SideOfV1));
+                wrapperSideOfV2.Slice.Mesh.SubMeshTriangles[Mesh.kernelSubmeshIndex].Add(new Triangle(i0SideOfV2, i12SideOfV2, i2SideOfV2));
                 #endif
                 var triangle = new SlicerTriangleOneVertexOnPlaneWrapper(triangleWrapper.V0, triangleWrapper.V1, triangleWrapper.V2);
                 AddTrianglesToSliceWhenPlanCutsTriangleInOneVertex(twoSliceWrappers, triangle, t);
@@ -443,8 +443,8 @@ namespace PopcornGenerator
                 int i02SideOfV0 = wrapperSideOfV0.GetInterpolatedVertexIndex(triangleWrapper.I0, triangleWrapper.I2, v02);
                 int i0SideOfV0 = wrapperSideOfV0.GetVertexIndex(triangleWrapper.I0, triangleWrapper.V0);
 
-                wrapperSideOfV2.Slice.Mesh.Triangles.Add(new Triangle(i2SideOfV2, i02SideOfV2, i1SideOfV2));
-                wrapperSideOfV0.Slice.Mesh.Triangles.Add(new Triangle(i1SideOfV0, i02SideOfV0, i0SideOfV0));
+                wrapperSideOfV2.Slice.Mesh.SubMeshTriangles[Mesh.kernelSubmeshIndex].Add(new Triangle(i2SideOfV2, i02SideOfV2, i1SideOfV2));
+                wrapperSideOfV0.Slice.Mesh.SubMeshTriangles[Mesh.kernelSubmeshIndex].Add(new Triangle(i1SideOfV0, i02SideOfV0, i0SideOfV0));
                 #endif
                 var triangle = new SlicerTriangleOneVertexOnPlaneWrapper(triangleWrapper.V1, triangleWrapper.V2, triangleWrapper.V0);
                 AddTrianglesToSliceWhenPlanCutsTriangleInOneVertex(twoSliceWrappers, triangle, t);
@@ -472,9 +472,9 @@ namespace PopcornGenerator
                 int i01SideOfV1 = wrapperSideOfV1.GetInterpolatedVertexIndex(triangleWrapper.I0, triangleWrapper.I1, v01);
                 int i2SideOfV1 = wrapperSideOfV1.GetVertexIndex(triangleWrapper.I2, triangleWrapper.V2);
 
-                wrapperSideOfV0.Slice.Mesh.Triangles.Add(new Triangle(i0SideOfV0, i01SideOfV0, i2SideOfV0));
-                //wrapperSideOfV1.Slice.Mesh.Triangles.Add(new Triangle(i1SideOfV1, i01SideOfV1, i2SideOfV1));
-                wrapperSideOfV1.Slice.Mesh.Triangles.Add(new Triangle(i2SideOfV1, i01SideOfV1, i1SideOfV1));
+                wrapperSideOfV0.Slice.Mesh.SubMeshTriangles[Mesh.kernelSubmeshIndex].Add(new Triangle(i0SideOfV0, i01SideOfV0, i2SideOfV0));
+                //wrapperSideOfV1.Slice.Mesh.SubMeshTriangles[Mesh.kernelSubmeshIndex].Add(new Triangle(i1SideOfV1, i01SideOfV1, i2SideOfV1));
+                wrapperSideOfV1.Slice.Mesh.SubMeshTriangles[Mesh.kernelSubmeshIndex].Add(new Triangle(i2SideOfV1, i01SideOfV1, i1SideOfV1));
                 #endif
                 var triangle = new SlicerTriangleOneVertexOnPlaneWrapper(triangleWrapper.V2, triangleWrapper.V0, triangleWrapper.V1);
                 AddTrianglesToSliceWhenPlanCutsTriangleInOneVertex(twoSliceWrappers, triangle, t);
@@ -522,9 +522,9 @@ namespace PopcornGenerator
                     int i12SideOfV2 = wrapperSideOfV2.GetInterpolatedVertexIndex(triangleWrapper.V1.I, triangleWrapper.V2.I, v12);
                     int i01SideOfV2 = wrapperSideOfV2.GetInterpolatedVertexIndex(triangleWrapper.V0.I, triangleWrapper.V1.I, v01);
 
-                    wrapperSideOfV1.Slice.Mesh.Triangles.Add(new Triangle(i1SideOfV1, i12SideOfV1, i01SideOfV1));
-                    wrapperSideOfV2.Slice.Mesh.Triangles.Add(new Triangle(i0SideOfV2, i01SideOfV2, i12SideOfV2));
-                    wrapperSideOfV2.Slice.Mesh.Triangles.Add(new Triangle(i0SideOfV2, i12SideOfV2, i2SideOfV2));
+                    wrapperSideOfV1.Slice.Mesh.SubMeshTriangles[Mesh.kernelSubmeshIndex].Add(new Triangle(i1SideOfV1, i12SideOfV1, i01SideOfV1));
+                    wrapperSideOfV2.Slice.Mesh.SubMeshTriangles[Mesh.kernelSubmeshIndex].Add(new Triangle(i0SideOfV2, i01SideOfV2, i12SideOfV2));
+                    wrapperSideOfV2.Slice.Mesh.SubMeshTriangles[Mesh.kernelSubmeshIndex].Add(new Triangle(i0SideOfV2, i12SideOfV2, i2SideOfV2));
                     #endif
                     //var triangle = new SlicerTriangleNoVertexOnPlaneWrapper(triangleWrapper.V1, triangleWrapper.V2, triangleWrapper.V0);
                     // No idea why there has to be 1.0f - t1 here.
@@ -554,9 +554,9 @@ namespace PopcornGenerator
                     int i12SideOfV2 = wrapperSideOfV2.GetInterpolatedVertexIndex(triangleWrapper.I1, triangleWrapper.I2, v12);
                     int i01SideOfV2 = wrapperSideOfV2.GetInterpolatedVertexIndex(triangleWrapper.I0, triangleWrapper.I1, v01);
 
-                    wrapperSideOfV1.Slice.Mesh.Triangles.Add(new Triangle(i1SideOfV1, i12SideOfV1, i01SideOfV1));
-                    wrapperSideOfV2.Slice.Mesh.Triangles.Add(new Triangle(i0SideOfV2, i01SideOfV2, i12SideOfV2));
-                    wrapperSideOfV2.Slice.Mesh.Triangles.Add(new Triangle(i0SideOfV2, i12SideOfV2, i2SideOfV2));
+                    wrapperSideOfV1.Slice.Mesh.SubMeshTriangles[Mesh.kernelSubmeshIndex].Add(new Triangle(i1SideOfV1, i12SideOfV1, i01SideOfV1));
+                    wrapperSideOfV2.Slice.Mesh.SubMeshTriangles[Mesh.kernelSubmeshIndex].Add(new Triangle(i0SideOfV2, i01SideOfV2, i12SideOfV2));
+                    wrapperSideOfV2.Slice.Mesh.SubMeshTriangles[Mesh.kernelSubmeshIndex].Add(new Triangle(i0SideOfV2, i12SideOfV2, i2SideOfV2));
                     #endif
                     var triangle = new SlicerTriangleNoVertexOnPlaneWrapper(triangleWrapper.V0, triangleWrapper.V1, triangleWrapper.V2);
                     AddTrianglesToSliceWhenPlaneCutsTriangleInTwoPoints(twoSliceWrappers, triangle, t1, t2);
@@ -587,9 +587,9 @@ namespace PopcornGenerator
                 int i20SideOfV0 = wrapperSideOfV0.GetInterpolatedVertexIndex(triangleWrapper.I2, triangleWrapper.I0, v20);
                 int i21SideOfV0 = wrapperSideOfV0.GetInterpolatedVertexIndex(triangleWrapper.I2, triangleWrapper.I1, v21);
 
-                wrapperSideOfV2.Slice.Mesh.Triangles.Add(new Triangle(i2SideOfV2, i20SideOfV2, i21SideOfV2));
-                wrapperSideOfV0.Slice.Mesh.Triangles.Add(new Triangle(i1SideOfV0, i21SideOfV0, i20SideOfV0));
-                wrapperSideOfV0.Slice.Mesh.Triangles.Add(new Triangle(i1SideOfV0, i20SideOfV0, i0SideOfV0));
+                wrapperSideOfV2.Slice.Mesh.SubMeshTriangles[Mesh.kernelSubmeshIndex].Add(new Triangle(i2SideOfV2, i20SideOfV2, i21SideOfV2));
+                wrapperSideOfV0.Slice.Mesh.SubMeshTriangles[Mesh.kernelSubmeshIndex].Add(new Triangle(i1SideOfV0, i21SideOfV0, i20SideOfV0));
+                wrapperSideOfV0.Slice.Mesh.SubMeshTriangles[Mesh.kernelSubmeshIndex].Add(new Triangle(i1SideOfV0, i20SideOfV0, i0SideOfV0));
                 #endif
                 var triangle = new SlicerTriangleNoVertexOnPlaneWrapper(triangleWrapper.V2, triangleWrapper.V0, triangleWrapper.V1);
                 AddTrianglesToSliceWhenPlaneCutsTriangleInTwoPoints(twoSliceWrappers, triangle, t1, t2);
