@@ -50,12 +50,13 @@ namespace PopcornGenerator
                 yield return null;
                 IList<Triangle> puffTriangles = GeneratePuffTriangles(kernelvertices, segments, verticesPerSegment,
                                                                       puffVertices);
-
-                //yield return null;
-                //RecalculateNormals(puffVertices, puffTriangles);
+#               if false
+                    yield return null;
+                    RecalculateNormals(puffVertices, puffTriangles);
+#               endif
 
                 yield return null;
-                GenerateUVCoordinates(puffVertices);
+                GenerateUVCoordinates(puffVertices, puffTriangles);
 
                 yield return null;
                 FlipTrianglesIfFacingInwards(kernelvertices, puffVertices, puffTriangles);
@@ -456,9 +457,56 @@ namespace PopcornGenerator
             }
         }
 
-        private static void GenerateUVCoordinates(IList<Vertex> puffVertices)
+        private static void GenerateUVCoordinates(IList<Vertex> puffVertices, IList<Triangle> puffTriangles)
         {
-            Debug.LogWarning($"Puff UV's not implemented.");
+            Vector3 puffCenter = Vector3.zero;
+            foreach (Vertex v in puffVertices)
+            {
+                puffCenter += v.Position;
+            }
+            puffCenter /= puffVertices.Count;
+
+            Vector3 meanPuffNormal = Vector3.zero;
+            foreach (Triangle t in puffTriangles)
+            {
+                Vector3 v0 = puffVertices[t.I0].Position;
+                Vector3 v1 = puffVertices[t.I1].Position;
+                Vector3 v2 = puffVertices[t.I2].Position;
+
+                meanPuffNormal += Vector3.Cross(v1 - v0, v2 - v0);
+            }
+            meanPuffNormal.Normalize();
+
+            Vector3 closestDirection = Vector3.Angle(meanPuffNormal, Vector3.forward) < Vector3.Angle(meanPuffNormal, Vector3.back)
+                                       ? Vector3.forward : Vector3.back;
+            Quaternion verticesRotation = Quaternion.FromToRotation(meanPuffNormal, closestDirection);
+
+            Bounds uvBounds = new Bounds();
+            for (int puffVertexIndex = 0; puffVertexIndex < puffVertices.Count; ++puffVertexIndex)
+            {
+                Vertex vertex = puffVertices[puffVertexIndex];
+                Vector3 position = vertex.Position;
+                position -= puffCenter; // Translate vertex to origin
+                position = Vector3.ProjectOnPlane(position, meanPuffNormal); // Project vertex on plane
+                position = verticesRotation * position; // Rotate vertex
+
+                Vector2 uv = new Vector2(position.x, position.y);
+                vertex.UV = uv;
+                puffVertices[puffVertexIndex] = vertex;
+
+                uvBounds.Encapsulate((Vector3)uv);
+            }
+
+            float factor = 0.95F / uvBounds.size.y;
+
+            for (int puffVertexIndex = 0; puffVertexIndex < puffVertices.Count; ++puffVertexIndex)
+            {
+                Vertex vertex = puffVertices[puffVertexIndex];
+                // the center of the whole uv coordinates is in (0, 0)
+                vertex.UV *= factor;
+                vertex.UV += new Vector2(0.5F, 0.5F);
+                puffVertices[puffVertexIndex] = vertex;
+            }
         }
 
         private static void FlipTrianglesIfFacingInwards(IList<Vertex> kernelVertices, IList<Vertex> puffVertices,
