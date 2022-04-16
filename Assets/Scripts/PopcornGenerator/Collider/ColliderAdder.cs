@@ -5,12 +5,12 @@ namespace PopcornGenerator
 {
     internal static class ColliderAdder
     {
-        public static void AddColliders(IList<RiggedSlice> riggedSlices,
-                                        IList<SkinnedMeshRenderer> skinnedMeshRenderers,
+        public static void AddColliders(List<RiggedSlice> riggedSlices,
+                                        List<SkinnedMeshRenderer> skinnedMeshRenderers,
                                         Collider kernelCollider,
                                         Transform kernelTransform)
         {
-            IList<Collider> colliders = new List<Collider>(riggedSlices.Count * riggedSlices[0].RiggingZonesIndices.Count);
+            List<Collider> colliders = new List<Collider>(riggedSlices.Count * riggedSlices[0].RiggingZonesIndices.Count);
 
             for (int sliceIndex = 0; sliceIndex < riggedSlices.Count; ++sliceIndex)
             {
@@ -22,7 +22,7 @@ namespace PopcornGenerator
 
                 for (int riggingZoneIndex = 0; riggingZoneIndex < riggedSlice.RiggingZonesIndices.Count; ++riggingZoneIndex)
                 {
-                    ISet<int> zoneIndices = riggedSlice.RiggingZonesIndices[riggingZoneIndex];
+                    HashSet<int> zoneIndices = riggedSlice.RiggingZonesIndices[riggingZoneIndex];
                     Transform bone = bones[riggingZoneIndex];
                     Bounds zoneBounds = CalculateRiggedZoneBounds(slice, zoneIndices, bone, kernelTransform);
 
@@ -42,7 +42,7 @@ namespace PopcornGenerator
             }
         }
 
-        private static Bounds CalculateRiggedZoneBounds(Slice slice, ISet<int> zoneIndices, Transform bone,
+        private static Bounds CalculateRiggedZoneBounds(Slice slice, HashSet<int> zoneIndices, Transform bone,
                                                         Transform kernelTransform)
         {
             Bounds bounds = new Bounds();

@@ -6,7 +6,7 @@ namespace PopcornGenerator
 {
     internal static class Utils
     {
-        public static void TransformVerticesToWorldSpace(IList<Vertex> vertices, Transform transform)
+        public static void TransformVerticesToWorldSpace(List<Vertex> vertices, Transform transform)
         {
             for (int vertexIndex = 0; vertexIndex < vertices.Count; ++vertexIndex)
             {
@@ -16,7 +16,7 @@ namespace PopcornGenerator
             }
         }
     
-        public static void TransformVerticesToLocalSpace(IList<Vertex> vertices, Transform transform)
+        public static void TransformVerticesToLocalSpace(List<Vertex> vertices, Transform transform)
         {
             for (int vertexIndex = 0; vertexIndex < vertices.Count; ++vertexIndex)
             {

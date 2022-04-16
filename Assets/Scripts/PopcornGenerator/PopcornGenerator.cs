@@ -71,9 +71,9 @@ namespace PopcornGenerator
             yield return null;
 
             int slicesCount = (int)Mathf.Pow(2, cuttingPlanes.Length);
-            IList<Slice> slices = new List<Slice>(slicesCount);
-            IList<RiggedSlice> riggedSlices = new List<RiggedSlice>(slicesCount);
-            IList<SkinnedMeshRenderer> skinnedMeshRenderers = new List<SkinnedMeshRenderer>(slicesCount);
+            List<Slice> slices = new List<Slice>(slicesCount);
+            List<RiggedSlice> riggedSlices = new List<RiggedSlice>(slicesCount);
+            List<SkinnedMeshRenderer> skinnedMeshRenderers = new List<SkinnedMeshRenderer>(slicesCount);
 
             ++frames;
             yield return null;
@@ -130,6 +130,12 @@ namespace PopcornGenerator
             ++frames;
             yield return null;
             //print($"Added animations");
+
+            for (int skmIndex = 0; skmIndex < skinnedMeshRenderers.Count; ++skmIndex)
+            {
+                string path = $@"C:\Users\Vlad Marius\Facultate\Disertatie\PopcornGenerator\RuntimeExports\Slices\slice{skmIndex}_with_uv.obj";
+                ObjExporter.WriteMesh(skinnedMeshRenderers[0].gameObject, path);
+            }
 
             #if false
             //foreach (var skm in skinnedMeshRenderers)
@@ -227,8 +233,8 @@ namespace PopcornGenerator
             int planesNum = Random.Range(2, 3);
             Plane[] planes = new Plane[planesNum];
 
-            float minAngleBetween = 30.0F;
-            float maxAngleBetween = 180.0F / planesNum;
+            float minAngleBetween = 45.0F;
+            float maxAngleBetween = 165.0F / planesNum;
 
             float angleJitter = Random.Range(0.0f, 180.0f);
 

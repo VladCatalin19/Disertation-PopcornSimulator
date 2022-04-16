@@ -5,10 +5,9 @@ using UnityEngine;
 
 namespace PopcornGenerator
 {
-    // TODO Bug: some triangles are flipped
     internal static class Slicer
     {
-        public static IEnumerator SliceMesh(Mesh mesh, IList<Plane> cuttingPlanes, IList<Slice> resultingSlices)
+        public static IEnumerator SliceMesh(Mesh mesh, Plane[] cuttingPlanes, List<Slice> resultingSlices)
         {
             IEnumerator sliceMeshEnumerator = SliceMeshIntoSlices(mesh, cuttingPlanes, resultingSlices);
             IEnumerator setMeshBorderEnumerator = SetMeshesBorderIndices(resultingSlices, cuttingPlanes);
@@ -24,9 +23,9 @@ namespace PopcornGenerator
             }
         }
 
-        private static IEnumerator SliceMeshIntoSlices(Mesh mesh, IList<Plane> cuttingPlanes, IList<Slice> resultingSlices)
+        private static IEnumerator SliceMeshIntoSlices(Mesh mesh, Plane[] cuttingPlanes, List<Slice> resultingSlices)
         {
-            int approxNumberOfSlices = (int)System.Math.Pow(2, cuttingPlanes.Count);
+            int approxNumberOfSlices = (int)System.Math.Pow(2, cuttingPlanes.Length);
             var toCutSliceWrappers = new List<SliceBuildingWrapper>(approxNumberOfSlices);
             var resultingSliceWrappers = new List<SliceBuildingWrapper>(approxNumberOfSlices);
 
@@ -34,7 +33,7 @@ namespace PopcornGenerator
 
             yield return null;
 
-            for (int planeIndex = 0; planeIndex < cuttingPlanes.Count; ++planeIndex)
+            for (int planeIndex = 0; planeIndex < cuttingPlanes.Length; ++planeIndex)
             {
                 for (int toCutIndex = 0; toCutIndex < toCutSliceWrappers.Count; ++toCutIndex)
                 {
@@ -57,9 +56,11 @@ namespace PopcornGenerator
                     yield return null;
                 }
 
-                //CreateMeshForEachSlice(resultingSliceWrappers, planeIndex);
+#               if DEBUG
+                    //CreateMeshForEachSlice(resultingSliceWrappers, planeIndex);
+#               endif
 
-                bool swapListsIfLastItem = (planeIndex != cuttingPlanes.Count - 1);
+                bool swapListsIfLastItem = (planeIndex != (cuttingPlanes.Length - 1));
                 if (swapListsIfLastItem)
                 {
                     // Instead of copying the elements from one list to the other,
@@ -74,22 +75,8 @@ namespace PopcornGenerator
             ConvertSliceBuildingWrappersToSlices(resultingSliceWrappers, resultingSlices);
         }
 
-        private static void CreateMeshForEachSlice(List<SliceBuildingWrapper> resultingSliceWrappers, int planeIndex)
-        {
-            GameObject goP = new GameObject($"Plane{planeIndex}");
-            for (int resultIndex = 0; resultIndex < resultingSliceWrappers.Count; ++resultIndex)
-            {
-                GameObject go = new GameObject($"Slice{resultIndex}");
-                go.transform.parent = goP.transform;
-                go.AddComponent<MeshFilter>().mesh = resultingSliceWrappers[resultIndex].Slice.Mesh.ToUnityMesh();
-                go.AddComponent<MeshRenderer>().material = new Material(Shader.Find("Universal Render Pipeline/Lit"));
-
-                //ObjExporter.WriteMesh(go, $@"{System.IO.Directory.GetCurrentDirectory()}\RuntimeExports\Slices\{name}.obj");
-            }
-        }
-
-        private static void ConvertSliceBuildingWrappersToSlices(IList<SliceBuildingWrapper> sliceBuildingWrappers,
-                                                                 IList<Slice> resultingSlices)
+        private static void ConvertSliceBuildingWrappersToSlices(List<SliceBuildingWrapper> sliceBuildingWrappers,
+                                                                 List<Slice> resultingSlices)
         {
             for (int sliceIndex = 0; sliceIndex < sliceBuildingWrappers.Count; ++sliceIndex)
             {
@@ -97,9 +84,9 @@ namespace PopcornGenerator
             }
         }
 
-        private static IEnumerator SetMeshesBorderIndices(IList<Slice> resultingSlices, IList<Plane> cuttingPlanes)
+        private static IEnumerator SetMeshesBorderIndices(List<Slice> resultingSlices, Plane[] cuttingPlanes)
         {
-            if (cuttingPlanes.Count == 1)
+            if (cuttingPlanes.Length == 1)
             {
                 Debug.LogWarning("Slicer -> SetMeshesBorderIndices: " +
                                  "Number of cutting planes is 1. Will not set intersecting planes indices");
@@ -108,12 +95,12 @@ namespace PopcornGenerator
             for (int sliceIndex = 0; sliceIndex < resultingSlices.Count; ++sliceIndex)
             {
                 Slice slice = resultingSlices[sliceIndex];
-                IList<Vertex> vertices = slice.Mesh.Vertices;
+                List<Vertex> vertices = slice.Mesh.Vertices;
                 for (int vertexIndex = 0; vertexIndex < vertices.Count; ++vertexIndex)
                 {
                     Vertex vertex = vertices[vertexIndex];
                     int numOfPlanesTheVertexIsOn = 0;
-                    for (int planeIndex = 0; planeIndex < cuttingPlanes.Count; ++planeIndex)
+                    for (int planeIndex = 0; planeIndex < cuttingPlanes.Length; ++planeIndex)
                     {
                         if (cuttingPlanes[planeIndex].GetSide(vertex.Position) == Plane.Side.on)
                         {
@@ -124,7 +111,7 @@ namespace PopcornGenerator
                         }
                     }
 
-                    if ((cuttingPlanes.Count > 1) && (numOfPlanesTheVertexIsOn == cuttingPlanes.Count))
+                    if ((cuttingPlanes.Length > 1) && (numOfPlanesTheVertexIsOn == cuttingPlanes.Length))
                     {
                         slice.Border.AddIntersectingPlanesIndex(vertexIndex);
                     }
@@ -136,9 +123,9 @@ namespace PopcornGenerator
         private static IEnumerator SliceSlice(Slice slice, Plane cuttingPlane, TwoSliceBuildingsWrapper twoSliceWrappers)
         {
             //foreach (Triangle triangle in slice.Mesh.SubMeshTriangles[Mesh.kernelSubmeshIndex])
-            for (int triangle_index = 0; triangle_index < slice.Mesh.SubMeshTriangles[Mesh.kernelSubmeshIndex].Count; ++triangle_index)
+            for (int triangleIndex = 0; triangleIndex < slice.Mesh.SubMeshTriangles[Mesh.kernelSubmeshIndex].Count; ++triangleIndex)
             {
-                Triangle triangle = slice.Mesh.SubMeshTriangles[Mesh.kernelSubmeshIndex][triangle_index];
+                Triangle triangle = slice.Mesh.SubMeshTriangles[Mesh.kernelSubmeshIndex][triangleIndex];
                 SlicerTriangleWrapper triangleWrapper = new SlicerTriangleWrapper(
                     triangle,
                     slice.Mesh.Vertices[triangle.I0],
@@ -174,7 +161,7 @@ namespace PopcornGenerator
                     SliceTriangleWithNoVertexOnPlane(twoSliceWrappers, triangleWrapper, cuttingPlane);
                 }
 
-                if (triangle_index % 300 == 0)
+                if (triangleIndex % 300 == 0)
                 {
                     yield return null;
                 }
@@ -595,5 +582,21 @@ namespace PopcornGenerator
                 AddTrianglesToSliceWhenPlaneCutsTriangleInTwoPoints(twoSliceWrappers, triangle, t1, t2);
             }
         }
+
+#       if DEBUG
+            private static void CreateMeshForEachSlice(List<SliceBuildingWrapper> resultingSliceWrappers, int planeIndex)
+            {
+                GameObject goP = new GameObject($"Plane{planeIndex}");
+                for (int resultIndex = 0; resultIndex < resultingSliceWrappers.Count; ++resultIndex)
+                {
+                    GameObject go = new GameObject($"Slice{resultIndex}");
+                    go.transform.parent = goP.transform;
+                    go.AddComponent<MeshFilter>().mesh = resultingSliceWrappers[resultIndex].Slice.Mesh.ToUnityMesh();
+                    go.AddComponent<MeshRenderer>().material = new Material(Shader.Find("Universal Render Pipeline/Lit"));
+
+                    //ObjExporter.WriteMesh(go, $@"{System.IO.Directory.GetCurrentDirectory()}\RuntimeExports\Slices\{name}.obj");
+                }
+            }
+#       endif
     }
 }

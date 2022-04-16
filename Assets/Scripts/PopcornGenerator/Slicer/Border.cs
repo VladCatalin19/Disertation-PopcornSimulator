@@ -5,20 +5,20 @@ namespace PopcornGenerator
 {
     internal struct Border
     {
-        private readonly IList<int> indicesList;
-        private readonly ISet<int> indicesSet;
-        private readonly IList<int> intersectingPlanesIndices;
+        private readonly List<int> indicesList;
+        private readonly HashSet<int> indicesSet;
+        private readonly List<int> intersectingPlanesIndices;
 
-        public Border(IList<int> indicesList, ISet<int> indicesSet, IList<int> intersectingPlanesIndices)
+        public Border(List<int> indicesList, HashSet<int> indicesSet, List<int> intersectingPlanesIndices)
         {
             this.indicesList = indicesList;
             this.indicesSet = indicesSet;
             this.intersectingPlanesIndices = intersectingPlanesIndices;
         }
 
-        public IList<int> IndicesList { get => indicesList; }
-        public ISet<int> IndicesSet { get => indicesSet; }
-        public IList<int> IntersectingIndices { get => intersectingPlanesIndices; }
+        public List<int> IndicesList { get => indicesList; }
+        public HashSet<int> IndicesSet { get => indicesSet; }
+        public List<int> IntersectingIndices { get => intersectingPlanesIndices; }
 
         public void AddIndex(int index)
         {

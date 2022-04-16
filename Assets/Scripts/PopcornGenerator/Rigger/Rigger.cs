@@ -7,7 +7,7 @@ namespace PopcornGenerator
 {
     internal static class Rigger
     {
-        public static IEnumerator RigSlices(IList<Slice> slices, Plane[] riggingPlanes, IList<RiggedSlice> riggedSlices)
+        public static IEnumerator RigSlices(List<Slice> slices, Plane[] riggingPlanes, List<RiggedSlice> riggedSlices)
         {
             RiggedSlice riggedSlice;
 
@@ -94,7 +94,21 @@ namespace PopcornGenerator
         {
             for (int riggingZoneIndex = 0; riggingZoneIndex < riggedSlice.RiggingZonesIndices.Count; ++riggingZoneIndex)
             {
+                #if true
+                Vector3 actualCenter = CalculateZoneCenter(riggedSlice.Slice.Mesh.Vertices,
+                                                           riggedSlice.RiggingZonesIndices[riggingZoneIndex]);
+                Vector3 kernelPartCenter = CalculateRiggingZoneBonePosition(riggedSlice, riggingZoneIndex);
+                riggedSlice.BonePositions[riggingZoneIndex] = Vector3.Lerp(actualCenter, kernelPartCenter, 0.5F);
+                //riggedSlice.BonePositions[riggingZoneIndex] = CalculateZoneCenter(riggedSlice.Slice.Mesh.Vertices,
+                //                                                                  riggedSlice.RiggingZonesIndices[riggingZoneIndex]);
+                #elif true
                 riggedSlice.BonePositions[riggingZoneIndex] = CalculateRiggingZoneBonePosition(riggedSlice, riggingZoneIndex);
+                #else
+                List<Vertex> meshVertices = riggedSlice.Slice.Mesh.Vertices;
+                HashSet<int> zoneIndices = CalculateRiggingZoneKernelSubmeshIndices(riggedSlice, riggingZoneIndex);
+                Vector3 zoneCenter = CalculateZoneCenter(meshVertices, zoneIndices);
+                riggedSlice.BonePositions[riggingZoneIndex] = zoneCenter;
+                #endif
                 if (riggingZoneIndex % 150 == 0)
                 {
                     yield return null;
@@ -105,8 +119,8 @@ namespace PopcornGenerator
 
         private static Vector3 CalculateRiggingZoneBonePosition(RiggedSlice riggedSlice, int zoneIndex)
         {
-            IList<Vertex> meshVertices = riggedSlice.Slice.Mesh.Vertices;
-            ISet<int> zoneIndices = CalculateRiggingZoneKernelSubmeshIndices(riggedSlice, zoneIndex);
+            List<Vertex> meshVertices = riggedSlice.Slice.Mesh.Vertices;
+            HashSet<int> zoneIndices = CalculateRiggingZoneKernelSubmeshIndices(riggedSlice, zoneIndex);
 
             Vector3 zoneCenter = CalculateZoneCenter(meshVertices, zoneIndices);
             Vector3 zoneMeanNormal = CalculateZoneMeanNormal(riggedSlice, meshVertices, zoneIndices);
@@ -260,11 +274,11 @@ namespace PopcornGenerator
 #endif
         }
 #endif
-        private static ISet<int> CalculateRiggingZoneKernelSubmeshIndices(RiggedSlice riggedSlice, int zoneIndex)
+        private static HashSet<int> CalculateRiggingZoneKernelSubmeshIndices(RiggedSlice riggedSlice, int zoneIndex)
         {
-            var indices = new HashSet<int>();
-            var riggingZoneIndices = riggedSlice.RiggingZonesIndices[zoneIndex];
-            var kernelSubmeshTriangles = riggedSlice.Slice.Mesh.SubMeshTriangles[Mesh.kernelSubmeshIndex];
+            HashSet<int> indices = new HashSet<int>();
+            HashSet<int> riggingZoneIndices = riggedSlice.RiggingZonesIndices[zoneIndex];
+            List<Triangle> kernelSubmeshTriangles = riggedSlice.Slice.Mesh.SubMeshTriangles[Mesh.kernelSubmeshIndex];
 
             void AddIndexIfInRiggingSlice(int index)
             {
@@ -284,7 +298,7 @@ namespace PopcornGenerator
             return indices;
         }
 
-        private static IList<Vector3> CalculateRiggingZoneKernelSubmeshVertices(RiggedSlice riggedSlice, ISet<int> indices)
+        private static List<Vector3> CalculateRiggingZoneKernelSubmeshVertices(RiggedSlice riggedSlice, HashSet<int> indices)
         {
             var vertices = new List<Vector3>(indices.Count);
             var sliceVertices = riggedSlice.Slice.Mesh.Vertices;
@@ -297,7 +311,7 @@ namespace PopcornGenerator
             return vertices;
         }
 
-        private static IList<Triangle> CalculateRiggignZoneKernelSubmeshTriangles(RiggedSlice riggedSlice, ISet<int> indices)
+        private static List<Triangle> CalculateRiggignZoneKernelSubmeshTriangles(RiggedSlice riggedSlice, HashSet<int> indices)
         {
             var triangles = new List<Triangle>();
             var kernelSubmeshTriangles = riggedSlice.Slice.Mesh.SubMeshTriangles[Mesh.kernelSubmeshIndex];
@@ -313,7 +327,7 @@ namespace PopcornGenerator
             return triangles;
         }
 
-        private static Vector3 CalculateZoneCenter(IList<Vertex> meshVertices, ISet<int> zoneIndices)
+        private static Vector3 CalculateZoneCenter(List<Vertex> meshVertices, HashSet<int> zoneIndices)
         {
             Vector3 zoneCenter = Vector3.zero;
             foreach (int index in zoneIndices)
@@ -324,7 +338,7 @@ namespace PopcornGenerator
             return zoneCenter;
         }
 
-        private static Vector3 CalculateZoneMeanNormal(RiggedSlice riggedSlice, IList<Vertex> meshVertices, ISet<int> zoneIndices)
+        private static Vector3 CalculateZoneMeanNormal(RiggedSlice riggedSlice, List<Vertex> meshVertices, HashSet<int> zoneIndices)
         {
             Vector3 meanNormal = Vector3.zero;
             var kernelSubmeshTriangles = riggedSlice.Slice.Mesh.SubMeshTriangles[Mesh.kernelSubmeshIndex];
@@ -353,7 +367,7 @@ namespace PopcornGenerator
             return verticesRotation;
         }
 
-        private static Bounds CalculateZoneBounds(IList<Vertex> meshVertices, ISet<int> zoneIndices, Vector3 zoneCenter,
+        private static Bounds CalculateZoneBounds(List<Vertex> meshVertices, HashSet<int> zoneIndices, Vector3 zoneCenter,
                                                   Vector3 zoneMeanNormal, Quaternion verticesRotation)
         {
             var bounds = new Bounds();
@@ -367,7 +381,7 @@ namespace PopcornGenerator
             return bounds;
         }
 
-        private static Vector3 GetVertexProjectedOnXoYPlane(IList<Vertex> meshVertices, Vector3 zoneCenter,
+        private static Vector3 GetVertexProjectedOnXoYPlane(List<Vertex> meshVertices, Vector3 zoneCenter,
                                                             Vector3 zoneMeanNormal, Quaternion zoneVerticesRotation, int index)
         {
             Vector3 vertex = meshVertices[index].Position;
@@ -384,7 +398,7 @@ namespace PopcornGenerator
                                zoneBounds.center.z);
         }
 
-        private static int CalculateClosestVertexToReference(IList<Vertex> meshVertices, ISet<int> zoneIndices,
+        private static int CalculateClosestVertexToReference(List<Vertex> meshVertices, HashSet<int> zoneIndices,
                                                              Vector3 zoneCenter, Vector3 zoneMeanNormal,
                                                              Quaternion zoneVerticesRotation, Vector3 referencePosition)
         {
@@ -416,13 +430,26 @@ namespace PopcornGenerator
             {
                 foreach (int vertexIndex in riggedSlice.RiggingZonesIndices[riggingZoneIndex])
                 {
-                 #if true
+#                   if false // not use smoothing
                     riggedSlice.BoneWeights[vertexIndex] = new BoneWeight()
                     {
                         boneIndex0 = riggingZoneIndex,
                         weight0 = 1.0f
                     };
-                 #else
+#                   else
+
+                    if (riggingZoneIndex == 0)
+                    {
+                        BoneWeight boneWeight0 = new BoneWeight()
+                        {
+                            boneIndex0 = 0,
+                            weight0 = 1.0F,
+                            boneIndex1 = 1,
+                            weight1 = 0.0F,
+                        };
+                        riggedSlice.BoneWeights[vertexIndex] = boneWeight0;
+                        continue;
+                    }
 
                     if (vertexIndex == 500)
                     {
@@ -430,8 +457,7 @@ namespace PopcornGenerator
 
                     Vector3 vertexPosition = riggedSlice.Slice.Mesh.Vertices[vertexIndex].Position;
 
-                    // Find closest 4 bones
-                    // TODO use stack
+                    // Find closest 3 bones
                     int minIndex0 = -1, minIndex1 = -1, minIndex2 = -1;//, minIndex3 = -1;
                     float minSqrDist0 = float.MaxValue, minSqrDist1 = float.MaxValue;
                     float minSqrDist2 = float.MaxValue;//, minSqrDist3 = float.MaxValue;
@@ -439,7 +465,7 @@ namespace PopcornGenerator
                     for (int boneIndex = 0; boneIndex < riggedSlice.BonePositions.Length; ++boneIndex)
                     {
                         Vector3 bonePosition = riggedSlice.BonePositions[boneIndex];
-                        float sqrDist = (vertexPosition - bonePosition).sqrMagnitude;
+                        float sqrDist = (vertexPosition - bonePosition).magnitude;
 
                         if (sqrDist < minSqrDist0)
                         {
@@ -463,7 +489,7 @@ namespace PopcornGenerator
                             minIndex2 = minIndex1;
                             minIndex1 = boneIndex;
                         }
-                        else// if (sqrDist < minSqrDist2)
+                        else if (sqrDist < minSqrDist2)
                         {
                             //minSqrDist3 = minSqrDist2;
                             minSqrDist2 = sqrDist;
@@ -479,16 +505,17 @@ namespace PopcornGenerator
                         }*/
                     }
 
-                    float totalDist = minSqrDist0 + minSqrDist1 + minSqrDist2;// + minSqrDist3;
+                    //float totalDist = minSqrDist0 + minSqrDist1 + minSqrDist2;// + minSqrDist3;
+                    float totalDist = 1.0F / minSqrDist0 + 1.0F / minSqrDist1 + 1.0F / minSqrDist2;
 
                     BoneWeight boneWeight = new BoneWeight()
                     {
                         boneIndex0 = minIndex0,
-                        weight0 = (1.0F - minSqrDist0 / totalDist),
+                        weight0 = (1.0F / minSqrDist0) / (totalDist),
                         boneIndex1 = minIndex1,
-                        weight1 = (1.0F - minSqrDist1 / totalDist),
+                        weight1 = (1.0F / minSqrDist1) / (totalDist),
                         boneIndex2 = minIndex2,
-                        weight2 = (1.0F - minSqrDist2 / totalDist),
+                        weight2 = (1.0F / minSqrDist2) / (totalDist),
                         //boneIndex3 = minIndex3,
                         //weight3 = minSqrDist3 / totalDist,
                     };
@@ -498,7 +525,8 @@ namespace PopcornGenerator
                     if (vertexIndex == 500)
                     {
                         Debug.Log($"Bone weights sum1: {boneWeight.weight0 + boneWeight.weight1 + boneWeight.weight2 + boneWeight.weight3:F5}");
-                        Debug.Log($"Bone weights sum2: {minSqrDist0 / totalDist + minSqrDist1 / totalDist + minSqrDist2 / totalDist /*+ minSqrDist3 / totalDist*/:F5}");
+                        Debug.Log($"Zone: {riggingZoneIndex}, Closest bones: {minIndex0}, {minIndex1}, {minIndex2}");
+                        //Debug.Log($"Bone weights sum2: {minSqrDist0 / totalDist + minSqrDist1 / totalDist + minSqrDist2 / totalDist /*+ minSqrDist3 / totalDist*/:F5}");
                     }
                 #endif
                 }

@@ -5,28 +5,7 @@ namespace PopcornGenerator
 {
     internal static class Animator
     {
-        private struct QuaternionCurves
-        {
-            private AnimationCurve curveX;
-            private AnimationCurve curveY;
-            private AnimationCurve curveZ;
-            private AnimationCurve curveW;
-
-            public void AllocateCurves()
-            {
-                curveX = new AnimationCurve();
-                curveY = new AnimationCurve();
-                curveZ = new AnimationCurve();
-                curveW = new AnimationCurve();
-            }
-
-            public AnimationCurve CurveX { get => curveX; }
-            public AnimationCurve CurveY { get => curveY; }
-            public AnimationCurve CurveZ { get => curveZ; }
-            public AnimationCurve CurveW { get => curveW; }
-        }
-
-        public static void Animate(ICollection<SkinnedMeshRenderer> skinnedMeshRenderers, Transform centerOfKernel,
+        public static void Animate(List<SkinnedMeshRenderer> skinnedMeshRenderers, Transform centerOfKernel,
                                    float minDuration, float maxDuration)
         {
             foreach (SkinnedMeshRenderer smr in skinnedMeshRenderers)
@@ -46,10 +25,6 @@ namespace PopcornGenerator
                             minDuration, maxDuration);
             }
         }
-        
-        // TODO: Add random to animation, slicing, rigging?
-        // Center part
-        // Curved white stuff
 
         private static void AnimateBone(Transform bone, Transform previousBone, Transform centerOfKernel,
                                         int depth, int maxDepth, float minDuration, float maxDuration)
@@ -95,20 +70,12 @@ namespace PopcornGenerator
         {
             Quaternion desiredLocalRotation = Quaternion.FromToRotation(localDirectionToPreviousBone,
                                                                         localDirectionToCenterOfKernel);
-            float t = Mathf.Lerp(Constants.AnimatorInterpolationRatio, 0.5f, (float)depth / (maxDepth + 1));
+            // TODO min and max should be related to number of rigging planes
+            //float t = Mathf.Lerp(0.7F, 0.5f, (float)depth / (maxDepth + 1));
+            float t = Mathf.Lerp(0.35F, 0.2F, (float)depth / (maxDepth + 1));
 
             desiredLocalRotation = Quaternion.Slerp(localRotation, desiredLocalRotation, t);
             return desiredLocalRotation;
-        }
-
-        private static void DrawDebugLines(Transform bone, Vector3 localDirectionToPreviousBone,
-                                           Vector3 localDirectionToCenterOfKernel, Quaternion desiredLocalRotation)
-        {
-            Vector3 localDirectionToPreviousBonePoint = 0.3F * bone.TransformDirection(localDirectionToPreviousBone).normalized;
-            Vector3 localDirectionToCenterOfKernelPoint = 0.2F * bone.TransformDirection(localDirectionToCenterOfKernel).normalized;
-            Debug.DrawLine(bone.position, localDirectionToPreviousBonePoint, Color.green, 3_600.0F);
-            Debug.DrawLine(bone.position, localDirectionToCenterOfKernelPoint, Color.cyan, 3_600.0F);
-            Debug.Log($"Desired local rotation: {desiredLocalRotation.eulerAngles:F5}");
         }
 
         private static void InitializeQuaternionCuves(QuaternionCurves curves, Quaternion localRotation,
@@ -147,5 +114,17 @@ namespace PopcornGenerator
             animation.AddClip(clip, "Expansion");
             animation.Play("Expansion");
         }
+
+#       if DEBUG
+            private static void DrawDebugLines(Transform bone, Vector3 localDirectionToPreviousBone,
+                                               Vector3 localDirectionToCenterOfKernel, Quaternion desiredLocalRotation)
+            {
+                Vector3 localDirectionToPreviousBonePoint = 0.3F * bone.TransformDirection(localDirectionToPreviousBone).normalized;
+                Vector3 localDirectionToCenterOfKernelPoint = 0.2F * bone.TransformDirection(localDirectionToCenterOfKernel).normalized;
+                Debug.DrawLine(bone.position, localDirectionToPreviousBonePoint, Color.green, 3_600.0F);
+                Debug.DrawLine(bone.position, localDirectionToCenterOfKernelPoint, Color.cyan, 3_600.0F);
+                Debug.Log($"Desired local rotation: {desiredLocalRotation.eulerAngles:F5}");
+            }
+#       endif
     }
 }

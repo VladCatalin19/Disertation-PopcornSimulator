@@ -25,6 +25,11 @@ Sem 1:
 - teste performanta
 - studiu coliziuni unity
 
+- de la sincron la asincron
+- expansiune toate o dată sau unele random
+- randomness la timpul de dat pe spate la partile pufoase
+- asamblat scena
+
 
 Sem 2:
 - fine tuning
@@ -33,3 +38,25 @@ Sem 2:
 - texturare dinamica? interpolare in functie de animatie si pozitie
 
 
+
+- Make popcorn jump.
+? Fix lighting / normals for puffed surfaces.
++ Add new texture / submesh for puffed parts.
+- Dynamic texture
+? Fix bone weights.
+- GPGPU collisions.
+- Make mini stages more efficient.
+- Better management for expanding popcorn.
+- More configuration.
+
+
+Optimizations:
+ - see if collections can have preallocated sizes
+ - use stackalloc for small arrays (maybe bones)
+
+
+
+Mai multe varfuri pe schelet / mesh
+Varfurile sa depinda de mai multe oase
+Oasele in interiorul feliilor
+Cum se fac coliziunile in Unity

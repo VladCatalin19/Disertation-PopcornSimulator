@@ -6,14 +6,14 @@ namespace PopcornGenerator
     internal struct RiggedSlice
     {
         private readonly Slice slice;
-        private readonly IList<ISet<int>> riggingZonesIndices;
+        private readonly List<HashSet<int>> riggingZonesIndices;
         private readonly Vector3[] bonePositions;
         private readonly BoneWeight[] boneWeights;
 
         public RiggedSlice(Slice slice, int riggingZones = 0, int approxIndicesPerZone = 0)
         {
             this.slice = slice;
-            riggingZonesIndices = new List<ISet<int>>(riggingZones);
+            riggingZonesIndices = new List<HashSet<int>>(riggingZones);
 
             for (int riggingZoneIndex = 0; riggingZoneIndex < riggingZones; ++riggingZoneIndex)
             {
@@ -27,7 +27,7 @@ namespace PopcornGenerator
         }
 
         public Slice Slice { get => slice; }
-        public IList<ISet<int>> RiggingZonesIndices { get => riggingZonesIndices; }
+        public List<HashSet<int>> RiggingZonesIndices { get => riggingZonesIndices; }
         public Vector3[] BonePositions { get => bonePositions; }
         public BoneWeight[] BoneWeights { get => boneWeights; }
     }

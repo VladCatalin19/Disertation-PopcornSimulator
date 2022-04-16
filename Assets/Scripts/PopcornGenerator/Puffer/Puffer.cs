@@ -18,14 +18,14 @@ namespace PopcornGenerator
             }
         );
 
-        public static IEnumerator Puff(IList<Slice> slices)
+        public static IEnumerator Puff(List<Slice> slices)
         {
             for (int sliceIndex = 0; sliceIndex < slices.Count; ++sliceIndex)
             {
                 yield return null;
 
-                IList<Vertex> kernelvertices = slices[sliceIndex].Mesh.Vertices;
-                IList<Triangle> kerneltriangles = slices[sliceIndex].Mesh.SubMeshTriangles[Mesh.kernelSubmeshIndex];
+                List<Vertex> kernelvertices = slices[sliceIndex].Mesh.Vertices;
+                List<Triangle> kerneltriangles = slices[sliceIndex].Mesh.SubMeshTriangles[Mesh.kernelSubmeshIndex];
                 Border border = slices[sliceIndex].Border;
 
                 yield return null;
@@ -45,11 +45,11 @@ namespace PopcornGenerator
                 int verticesPerSegment = 22;
 
                 yield return null;
-                IList<Vertex> puffVertices = GeneratePuffVertices(kernelvertices, segments, verticesPerSegment,
-                                                                  firstCurveIndices, secondCurveIndices);
+                List<Vertex> puffVertices = GeneratePuffVertices(kernelvertices, segments, verticesPerSegment,
+                                                                 firstCurveIndices, secondCurveIndices);
                 yield return null;
-                IList<Triangle> puffTriangles = GeneratePuffTriangles(kernelvertices, segments, verticesPerSegment,
-                                                                      puffVertices);
+                List<Triangle> puffTriangles = GeneratePuffTriangles(kernelvertices, segments, verticesPerSegment,
+                                                                     puffVertices);
 #               if false
                     yield return null;
                     RecalculateNormals(puffVertices, puffTriangles);
@@ -69,7 +69,7 @@ namespace PopcornGenerator
             }
         }
 
-        private static void PrintCurvesIndicesIfSecondHasLessThan5Indices(IList<int> firstCurveIndices, IList<int> secondCurveIndices)
+        private static void PrintCurvesIndicesIfSecondHasLessThan5Indices(List<int> firstCurveIndices, List<int> secondCurveIndices)
         {
             if (secondCurveIndices.Count < 5)
             {
@@ -85,7 +85,7 @@ namespace PopcornGenerator
             }
         }
 
-        private static void CreateCubesOnBorders(IList<Slice> slices, int sliceIndex, IList<int> firstCurveIndices, IList<int> secondCurveIndices)
+        private static void CreateCubesOnBorders(List<Slice> slices, int sliceIndex, List<int> firstCurveIndices, List<int> secondCurveIndices)
         {
             float scale = 0.015f;
             GameObject borderParent = new GameObject($"Slice {sliceIndex} First Border Indices");
@@ -113,7 +113,7 @@ namespace PopcornGenerator
             }
         }
 
-        private static int MinYIndex(IList<int> indices, IList<Vertex> vertices)
+        private static int MinYIndex(List<int> indices, List<Vertex> vertices)
         {
             int minIndex = -1;
             float minY = float.MaxValue;
@@ -131,7 +131,7 @@ namespace PopcornGenerator
             return minIndex;
         }
 
-        private static int MaxYIndex(IList<int> indices, IList<Vertex> vertices)
+        private static int MaxYIndex(List<int> indices, List<Vertex> vertices)
         {
             int maxIndex = -1;
             float maxY = float.MinValue;
@@ -149,11 +149,11 @@ namespace PopcornGenerator
             return maxIndex;
         }
 
-        private static (IList<int>, IList<int>) GetCurvesIndices(IList<Vertex> vertices, Border border)
+        private static (List<int>, List<int>) GetCurvesIndices(List<Vertex> vertices, Border border)
         {
             int curveIndicesCount = border.IndicesList.Count / 2;
-            IList<int> firstCurveIndices = new List<int>(curveIndicesCount);
-            IList<int> secondCurveIndices = new List<int>(curveIndicesCount);
+            List<int> firstCurveIndices = new List<int>(curveIndicesCount);
+            List<int> secondCurveIndices = new List<int>(curveIndicesCount);
 
             bool[] visitedIndices = new bool[border.IndicesList.Count];
             int bottomIndex = MinYIndex(border.IntersectingIndices, vertices);
@@ -165,7 +165,7 @@ namespace PopcornGenerator
 
             for (int curveIndex = 0; curveIndex < 2; ++curveIndex)
             {
-                IList<int> curveIndices = curveIndex == 0 ? firstCurveIndices : secondCurveIndices;
+                List<int> curveIndices = curveIndex == 0 ? firstCurveIndices : secondCurveIndices;
 
                 currentIndex = topIndex;
                 int maxSteps = Mathf.RoundToInt(curveIndicesCount * 1.3f);
@@ -205,17 +205,17 @@ namespace PopcornGenerator
             return (firstCurveIndices, secondCurveIndices);
         }
 
-        private static IList<Vertex> GeneratePuffVertices(IList<Vertex> vertices,
-                                                          int segments,
-                                                          int verticesPerSegment,
-                                                          IList<int> firstCurveIndices,
-                                                          IList<int> secondCurveIndices)
+        private static List<Vertex> GeneratePuffVertices(List<Vertex> vertices,
+                                                         int segments,
+                                                         int verticesPerSegment,
+                                                         List<int> firstCurveIndices,
+                                                         List<int> secondCurveIndices)
         {
             float dirPercent = 0.9f;
             float dirMaxMagniture = 3.0f;
 
             //int[,] interpolatedVertices = new int[segments, verticesPerSegment];
-            IList<Vertex> puffVertices = new List<Vertex>(segments * verticesPerSegment);
+            List<Vertex> puffVertices = new List<Vertex>(segments * verticesPerSegment);
 
             for (int lineIndex = 0; lineIndex < segments; ++lineIndex)
             {
@@ -225,7 +225,7 @@ namespace PopcornGenerator
                 Vector3 dir = v1.Position - v0.Position;
                 //Debug.Log($"Slice {sliceIndex} dir.magnitude: {dir.magnitude}");
 
-                Vector3 dirToLook = -Vector3.Lerp(v0.Normal.Value, v1.Normal.Value, 0.5f).normalized;//Vector3.Cross(dir.normalized, Vector3.up);//
+                Vector3 dirToLook = -Vector3.Lerp(v0.Normal, v1.Normal, 0.5f).normalized;//Vector3.Cross(dir.normalized, Vector3.up);//
                 float lineT = (float)lineIndex / (segments - 1);
                 //Quaternion q = Quaternion.FromToRotation(Vector3.up, dirToLook);
 
@@ -274,13 +274,13 @@ namespace PopcornGenerator
             return Vector3.Angle(normal, meanNormal) > 90.0F;
         }
 
-        private static IList<Triangle> GeneratePuffTriangles(IList<Vertex> vertices,
-                                                             int segments,
-                                                             int verticesPerSegment,
-                                                             IList<Vertex> puffVertices)
+        private static List<Triangle> GeneratePuffTriangles(List<Vertex> vertices,
+                                                            int segments,
+                                                            int verticesPerSegment,
+                                                            List<Vertex> puffVertices)
         {
             int trianglesNumber = (segments - 1) * (verticesPerSegment - 1) * 2;
-            IList<Triangle> puffTriangles = new List<Triangle>(trianglesNumber);
+            List<Triangle> puffTriangles = new List<Triangle>(trianglesNumber);
 
             for (int lineIndex = 0; lineIndex < segments - 1; ++lineIndex)
             {
@@ -420,7 +420,7 @@ namespace PopcornGenerator
         }
 
         // https://computergraphics.stackexchange.com/a/4032 - Smooth shading normals
-        private static void RecalculateNormals(IList<Vertex> vertices, IList<Triangle> triangles)
+        private static void RecalculateNormals(List<Vertex> vertices, List<Triangle> triangles)
         {
             for (int vertexIndex = 0; vertexIndex < vertices.Count; ++vertexIndex)
             {
@@ -452,12 +452,12 @@ namespace PopcornGenerator
             for (int vertexIndex = 0; vertexIndex < vertices.Count; ++vertexIndex)
             {
                 Vertex v = vertices[vertexIndex];
-                v.Normal = v.Normal.Value.normalized;
+                v.Normal = v.Normal.normalized;
                 vertices[vertexIndex] = v;
             }
         }
 
-        private static void GenerateUVCoordinates(IList<Vertex> puffVertices, IList<Triangle> puffTriangles)
+        private static void GenerateUVCoordinates(List<Vertex> puffVertices, List<Triangle> puffTriangles)
         {
             Vector3 puffCenter = Vector3.zero;
             foreach (Vertex v in puffVertices)
@@ -509,13 +509,13 @@ namespace PopcornGenerator
             }
         }
 
-        private static void FlipTrianglesIfFacingInwards(IList<Vertex> kernelVertices, IList<Vertex> puffVertices,
-                                                         IList<Triangle> puffTriangles)
+        private static void FlipTrianglesIfFacingInwards(List<Vertex> kernelVertices, List<Vertex> puffVertices,
+                                                         List<Triangle> puffTriangles)
         {
             Vector3 meanKernelNormal = Vector3.zero;
             foreach (Vertex v in kernelVertices)
             {
-                meanKernelNormal += v.Normal.Value;
+                meanKernelNormal += v.Normal;
             }
             meanKernelNormal.Normalize();
 
@@ -542,7 +542,7 @@ namespace PopcornGenerator
             }
         }
 
-        private static void AddBaseIndexToTriangleIndices(IList<Triangle> triangles, int baseIndex)
+        private static void AddBaseIndexToTriangleIndices(List<Triangle> triangles, int baseIndex)
         {
             for (int triangleIndex = 0; triangleIndex < triangles.Count; ++triangleIndex)
             {
@@ -554,8 +554,8 @@ namespace PopcornGenerator
             }
         }
 
-        private static void AddVerticesAndTrianglesToMesh(IList<Vertex> vertices,
-                                                          IList<Triangle> triangles,
+        private static void AddVerticesAndTrianglesToMesh(List<Vertex> vertices,
+                                                          List<Triangle> triangles,
                                                           Mesh mesh)
         {
             foreach (Vertex vertex in vertices)

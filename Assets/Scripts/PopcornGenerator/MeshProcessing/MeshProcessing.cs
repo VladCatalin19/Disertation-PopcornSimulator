@@ -10,11 +10,11 @@ namespace PopcornGenerator
 {
     internal static class MeshProcessing
     {
-        public static IEnumerator RiggedSlicesToSkinnedMeshRenderers(IList<RiggedSlice> riggedSlices,
+        public static IEnumerator RiggedSlicesToSkinnedMeshRenderers(List<RiggedSlice> riggedSlices,
                                                                      Transform kernelTransform,
                                                                      MeshRenderer kernelMeshRenderer,
                                                                      Material puffMaterial,
-                                                                     IList<SkinnedMeshRenderer> skinnedMeshRenderers
+                                                                     List<SkinnedMeshRenderer> skinnedMeshRenderers
         )
         {
             for (int riggedSliceIndex = 0; riggedSliceIndex < riggedSlices.Count; ++riggedSliceIndex)
@@ -77,9 +77,8 @@ namespace PopcornGenerator
             return bones;
         }
 
-        private static UnityEngine.Mesh CreateUnityMesh(
-            RiggedSlice riggedSlice, int riggedSliceIndex, Transform kernelTransform, Transform[] bones
-        )
+        private static UnityEngine.Mesh CreateUnityMesh(RiggedSlice riggedSlice, int riggedSliceIndex,
+                                                        Transform kernelTransform, Transform[] bones)
         {
             UnityEngine.Mesh unityMesh = riggedSlice.Slice.Mesh.ToUnityMesh();
             unityMesh.name = $"Slice {riggedSliceIndex} mesh";

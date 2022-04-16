@@ -8,21 +8,21 @@ namespace PopcornGenerator
         public const int kernelSubmeshIndex = 0;
         public const int puffSubmeshIndex = 1;
 
-        private readonly IList<Vertex> vertices;
-        private readonly IList<IList<Triangle>> subMeshTriangles;
+        private readonly List<Vertex> vertices;
+        private readonly List<List<Triangle>> subMeshTriangles;
         private readonly bool hasNormals;
         private readonly bool hasUVs;
 
         public Mesh(bool hasNormals = false, bool hasUVs = false)
         {
             vertices = new List<Vertex>();
-            subMeshTriangles = new List<IList<Triangle>>();
+            subMeshTriangles = new List<List<Triangle>>();
             subMeshTriangles.Add(new List<Triangle>());
             this.hasNormals = hasNormals;
             this.hasUVs = hasUVs;
         }
 
-        public Mesh(IList<Vertex> vertices, IList<IList<Triangle>> subMeshTriangles, bool hasNormals = false, bool hasUVs = false)
+        public Mesh(List<Vertex> vertices, List<List<Triangle>> subMeshTriangles, bool hasNormals = false, bool hasUVs = false)
         {
             this.vertices = vertices;
             this.subMeshTriangles = subMeshTriangles;
@@ -39,8 +39,8 @@ namespace PopcornGenerator
             for (int vertexIndex = 0; vertexIndex < vertices.Length; ++vertexIndex)
             {
                 Vector3 position = vertices[vertexIndex];
-                Vector3? normal = normals?[vertexIndex];
-                Vector2? uv = uvs?[vertexIndex];
+                Vector3 normal = ((normals != null) && (vertexIndex < normals.Length)) ? normals[vertexIndex] : Vector3.zero;
+                Vector2 uv = ((uvs != null) && (vertexIndex < uvs.Length)) ? uvs[vertexIndex] : Vector2.zero;
 
                 this.vertices.Add(new Vertex(position, normal, uv));
             }
@@ -55,15 +55,17 @@ namespace PopcornGenerator
                 trianglesList.Add(new Triangle(i0, i1, i2));
             }
 
-            subMeshTriangles = new List<IList<Triangle>>();
-            subMeshTriangles.Add(trianglesList);
+            subMeshTriangles = new List<List<Triangle>>
+            {
+                trianglesList
+            };
 
-            hasNormals = normals != null && normals.Length == vertices.Length;
-            hasUVs = uvs != null && uvs.Length == vertices.Length;
+            hasNormals = ((normals != null) && (normals.Length == vertices.Length));
+            hasUVs = ((uvs != null) && (uvs.Length == vertices.Length));
         }
 
-        public IList<Vertex> Vertices { get => vertices; }
-        public IList<IList<Triangle>> SubMeshTriangles { get => subMeshTriangles; }
+        public List<Vertex> Vertices { get => vertices; }
+        public List<List<Triangle>> SubMeshTriangles { get => subMeshTriangles; }
         public bool HasNormals { get => hasNormals; }
         public bool HasUVs { get => hasUVs; }
 
@@ -78,11 +80,11 @@ namespace PopcornGenerator
                 unityVertices[vertexIndex] = vertices[vertexIndex].Position;
                 if (hasNormals)
                 {
-                    unityNormals[vertexIndex] = vertices[vertexIndex].Normal.Value;
+                    unityNormals[vertexIndex] = vertices[vertexIndex].Normal;
                 }
                 if (hasUVs)
                 {
-                    unityUVs[vertexIndex] = vertices[vertexIndex].UV.Value;
+                    unityUVs[vertexIndex] = vertices[vertexIndex].UV;
                 }
             }
 
