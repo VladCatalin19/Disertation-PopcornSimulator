@@ -3,13 +3,17 @@ using System.Collections;
 using System.Runtime.CompilerServices;
 using UnityEngine;
 
+using Stopwatch = System.Diagnostics.Stopwatch;
+
 namespace PopcornGenerator
 {
     internal static class Slicer
     {
-        public static IEnumerator SliceMesh(Mesh mesh, Plane[] cuttingPlanes, List<Slice> resultingSlices)
+        public static IEnumerator SliceMesh(Mesh mesh, Plane[] cuttingPlanes, List<Slice> resultingSlices,
+                                            PopcornGeneratorProperties properties)
         {
-            IEnumerator sliceMeshEnumerator = SliceMeshIntoSlices(mesh, cuttingPlanes, resultingSlices);
+            IEnumerator sliceMeshEnumerator = SliceMeshIntoSlices(mesh, cuttingPlanes, resultingSlices,
+                                                                  properties.stopwatch, properties.microsecondsToYield);
             IEnumerator setMeshBorderEnumerator = SetMeshesBorderIndices(resultingSlices, cuttingPlanes);
             yield return null;
 
@@ -23,28 +27,44 @@ namespace PopcornGenerator
             }
         }
 
-        private static IEnumerator SliceMeshIntoSlices(Mesh mesh, Plane[] cuttingPlanes, List<Slice> resultingSlices)
+        private static IEnumerator SliceMeshIntoSlices(Mesh mesh, Plane[] cuttingPlanes, List<Slice> resultingSlices,
+                                                       Stopwatch sw, long microsecondsToYield)
         {
-            int approxNumberOfSlices = (int)System.Math.Pow(2, cuttingPlanes.Length);
+            yield return null;
+            int approxNumberOfSlices = (int)Mathf.Pow(2, cuttingPlanes.Length);
             var toCutSliceWrappers = new List<SliceBuildingWrapper>(approxNumberOfSlices);
-            var resultingSliceWrappers = new List<SliceBuildingWrapper>(approxNumberOfSlices);
 
+            yield return null;
+
+            var resultingSliceWrappers = new List<SliceBuildingWrapper>(approxNumberOfSlices);
             toCutSliceWrappers.Add(new SliceBuildingWrapper(new Slice(mesh)));
 
             yield return null;
+            //Debug.LogError($"After creating resultingSliceWrappers list");
 
             for (int planeIndex = 0; planeIndex < cuttingPlanes.Length; ++planeIndex)
             {
                 for (int toCutIndex = 0; toCutIndex < toCutSliceWrappers.Count; ++toCutIndex)
                 {
                     Slice slice = toCutSliceWrappers[toCutIndex].Slice;
+
+                    int iterationSlices = cuttingPlanes.Length * toCutSliceWrappers.Count;
+                    int vertexCapacity = slice.Mesh.Vertices.Count / iterationSlices;
+                    int trianglesCapacity = slice.Mesh.SubMeshTriangles[Mesh.kernelSubmeshIndex].Count / iterationSlices;
+
+                    Mesh m1 = new Mesh(iterationSlices, trianglesCapacity, slice.Mesh.HasNormals, slice.Mesh.HasUVs);
+                    Mesh m2 = new Mesh(iterationSlices, trianglesCapacity, slice.Mesh.HasNormals, slice.Mesh.HasUVs);
+                    yield return null;
+
                     TwoSliceBuildingsWrapper twoSlices = new TwoSliceBuildingsWrapper
                     (
-                        new SliceBuildingWrapper(new Slice(new Mesh(slice.Mesh.HasNormals, slice.Mesh.HasUVs))),
-                        new SliceBuildingWrapper(new Slice(new Mesh(slice.Mesh.HasNormals, slice.Mesh.HasUVs)))
+                        new SliceBuildingWrapper(new Slice(m1)),
+                        new SliceBuildingWrapper(new Slice(m2))
                     );
 
-                    IEnumerator sliceEnumerator = SliceSlice(slice, cuttingPlanes[planeIndex], twoSlices);
+                    IEnumerator sliceEnumerator = SliceSlice(slice, cuttingPlanes[planeIndex], twoSlices, sw, microsecondsToYield);
+                    yield return null;
+
                     while (sliceEnumerator.MoveNext())
                     {
                         yield return null;
@@ -56,8 +76,8 @@ namespace PopcornGenerator
                     yield return null;
                 }
 
-#               if DEBUG
-                    //CreateMeshForEachSlice(resultingSliceWrappers, planeIndex);
+#               if DEBUG && false
+                    CreateMeshForEachSlice(resultingSliceWrappers, planeIndex);
 #               endif
 
                 bool swapListsIfLastItem = (planeIndex != (cuttingPlanes.Length - 1));
@@ -120,8 +140,9 @@ namespace PopcornGenerator
             }
         }
 
-        private static IEnumerator SliceSlice(Slice slice, Plane cuttingPlane, TwoSliceBuildingsWrapper twoSliceWrappers)
+        private static IEnumerator SliceSlice(Slice slice, Plane cuttingPlane, TwoSliceBuildingsWrapper twoSliceWrappers, Stopwatch sw, long microsecondsToYield)
         {
+            sw.Restart();
             //foreach (Triangle triangle in slice.Mesh.SubMeshTriangles[Mesh.kernelSubmeshIndex])
             for (int triangleIndex = 0; triangleIndex < slice.Mesh.SubMeshTriangles[Mesh.kernelSubmeshIndex].Count; ++triangleIndex)
             {
@@ -161,9 +182,12 @@ namespace PopcornGenerator
                     SliceTriangleWithNoVertexOnPlane(twoSliceWrappers, triangleWrapper, cuttingPlane);
                 }
 
-                if (triangleIndex % 300 == 0)
+                //if (triangleIndex % 300 == 0)
+                if (sw.ElapsedTicks / 10 > microsecondsToYield)
                 {
                     yield return null;
+                    sw.Restart();
+                    //Debug.LogError($"After yield SliceSlice");
                 }
             }
         }

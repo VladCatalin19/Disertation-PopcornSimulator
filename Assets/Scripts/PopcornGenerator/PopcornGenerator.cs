@@ -1,8 +1,9 @@
-﻿using System.Collections.Generic;
+﻿//#define POPCORN_GEN__LOG_PER_FRAME
+
+using System.Collections.Generic;
 using System.Collections;
 using UnityEngine;
 using UnityEngine.Events;
-using UnityEngine.UI;
 
 using Stopwatch = System.Diagnostics.Stopwatch;
 
@@ -12,6 +13,7 @@ namespace PopcornGenerator
     {
         [SerializeField] private GameObject kernel = null;
         [SerializeField] private Collider kernelCollider = null;
+        [SerializeField] private new Rigidbody rigidbody = null;
         [SerializeField] private Transform cuttingPlanesParent = null;
         [SerializeField] private Transform riggingPlanesParent = null;
 
@@ -24,8 +26,7 @@ namespace PopcornGenerator
         public Lumpn.Threading.IThread UnityThread { get; set; }
         public Lumpn.Threading.IThread WorkerThread  { get; set; }
 
-        public float MinExpansionTime { get; set; }
-        public float MaxExpansionTime { get; set; }
+        public PopcornGeneratorProperties GeneratorProperties { get; set; }
 
         private Plane[] cuttingPlanes = null;
         private Plane[] riggingPlanes = null;
@@ -61,15 +62,21 @@ namespace PopcornGenerator
         {
             int frames = 0;
 
+            LogStageName($"Getting needed unity components");
             Transform kernelTransform = kernel.transform;
             MeshFilter kernelMeshFilter = kernel.GetComponent<MeshFilter>();
             MeshRenderer kernelMeshRenderer = kernel.GetComponent<MeshRenderer>();
-            Mesh mesh = new Mesh(kernelMeshFilter.mesh);
-            Material puffMaterial = puffMaterialPrefab;//Instantiate(puffMaterialPrefab);
 
             //yield return WorkerThread.Context;
+            ++frames;
+            yield return null;
+            LogStageName($"Allocating mesh");
+            Mesh mesh = new Mesh(kernelMeshFilter.mesh);
+
+            ++frames;
             yield return null;
 
+            LogStageName($"Allocating lists");
             int slicesCount = (int)Mathf.Pow(2, cuttingPlanes.Length);
             List<Slice> slices = new List<Slice>(slicesCount);
             List<RiggedSlice> riggedSlices = new List<RiggedSlice>(slicesCount);
@@ -78,66 +85,95 @@ namespace PopcornGenerator
             ++frames;
             yield return null;
 
+            LogStageName($"Creating enumerators");
             //Utils.TransformVerticesToWorldSpace(mesh.Vertices, kernelTransform);
-            IEnumerator slicerEnumerator = Slicer.SliceMesh(mesh, cuttingPlanes, slices);
-            IEnumerator pufferEnumerator = Puffer.Puff(slices);
-            IEnumerator riggerEnumerator = Rigger.RigSlices(slices, riggingPlanes, riggedSlices);
+            var properties = GeneratorProperties;
+            properties.stopwatch = new Stopwatch();
+            GeneratorProperties = properties;
+
+            IEnumerator slicerEnumerator = Slicer.SliceMesh(mesh, cuttingPlanes, slices, GeneratorProperties);
+            IEnumerator pufferEnumerator = Puffer.Puff(slices, GeneratorProperties);
+            IEnumerator riggerEnumerator = Rigger.RigSlices(slices, riggingPlanes, riggedSlices, GeneratorProperties);
             IEnumerator meshProcessingEnumerator = MeshProcessing.RiggedSlicesToSkinnedMeshRenderers(riggedSlices,
                                                                                                      kernelTransform,
                                                                                                      kernelMeshRenderer,
-                                                                                                     puffMaterial,
-                                                                                                     skinnedMeshRenderers);
-            //print($"Slicer start");
+                                                                                                     puffMaterialPrefab,
+                                                                                                     skinnedMeshRenderers,
+                                                                                                     GeneratorProperties);
+            IEnumerator colliderAdderEnumerator = ColliderAdder.AddColliders(riggedSlices, skinnedMeshRenderers,
+                                                                             kernelCollider, kernelTransform, GeneratorProperties);
+            IEnumerator animatorEnumerator = Animator.Animate(skinnedMeshRenderers, kernelTransform, GeneratorProperties);
+            ++frames;
+            yield return null;
+
+            LogStageName($"Slicer start");
             while (slicerEnumerator.MoveNext())
             {
                 ++frames;
                 yield return null;
             }
-            //print($"Slicer done {slices.Count}");
-            //print($"Puffer start");
+            LogStageName($"Slicer done. Slices: {slices.Count}");
+            LogStageName($"Puffer start");
             while (pufferEnumerator.MoveNext())
             {
                 ++frames;
                 yield return null;
             }
-            //print($"Puffer done");
-            //print($"Rigger start");
+            LogStageName($"Puffer done");
+            LogStageName($"Rigger start");
             while (riggerEnumerator.MoveNext())
             {
                 ++frames;
                 yield return null;
             }
-            //print($"Rigger done {riggedSlices.Count}");
+            LogStageName($"Rigger done. Rigged slices: {riggedSlices.Count}");
 
             //yield return UnityThread.Context;
 
-            //print($"Mesh Processing start");
+            LogStageName($"Mesh Processing start");
             while (meshProcessingEnumerator.MoveNext())
             {
                 ++frames;
                 yield return null;
             }
-            //print($"Mesh Processing done {skinnedMeshRenderers.Count}");
+            LogStageName($"Mesh Processing done. Skinned mesh renderes: {skinnedMeshRenderers.Count}");
+
+            LogStageName($"Adding colliders");
+            while (colliderAdderEnumerator.MoveNext())
+            {
+                ++frames;
+                yield return null;
+            }
             
-            //print($"Adding colliders");
-            ColliderAdder.AddColliders(riggedSlices, skinnedMeshRenderers, kernelCollider, kernelTransform);
             ++frames;
             yield return null;
-            //print($"Added colliders");
+            LogStageName($"Added colliders");
 
-            //print($"Adding animations");
-            Animator.Animate(skinnedMeshRenderers, kernelTransform, MinExpansionTime, MaxExpansionTime);
-            ++frames;
-            yield return null;
-            //print($"Added animations");
+            LogStageName($"Adding animations");
+            while (animatorEnumerator.MoveNext())
+            {
+                ++frames;
+                yield return null;
+            }
+            LogStageName($"Added animations");
 
+            LogStageName($"Adding jump force");
+            Jumper.MakePopcornJump(rigidbody, GeneratorProperties);
+            LogStageName($"Added jump force");
+
+            LogStageName($"Calling on kernel expansion events");
+            onKernelExpansion.Invoke();
+            LogStageName($"Called on kernel expansion events");
+
+            #if false // export slices as obj's
             for (int skmIndex = 0; skmIndex < skinnedMeshRenderers.Count; ++skmIndex)
             {
                 string path = $@"C:\Users\Vlad Marius\Facultate\Disertatie\PopcornGenerator\RuntimeExports\Slices\slice{skmIndex}_with_uv.obj";
                 ObjExporter.WriteMesh(skinnedMeshRenderers[0].gameObject, path);
             }
+            #endif
 
-            #if false
+            #if false // draw normals for each vertex
             //foreach (var skm in skinnedMeshRenderers)
             {
                 var skm = skinnedMeshRenderers[0];
@@ -173,13 +209,16 @@ namespace PopcornGenerator
             Destroy(kernelMeshFilter);
             Destroy(kernelMeshRenderer);
 
-            HidePlanes();
-            onKernelExpansion.Invoke();
+            yield return null;
 
-            print($"Number of frames: {frames}");
+            HidePlanes();
+
+#           if POPCORN_GEN__LOG_PER_FRAME
+                print($"Number of frames: {frames}");
+#           endif
         }
 
-        public void MakePopcornSequencial()
+        public void MakePopcornSequential()
         {
             long prevElapsed;
             long currElapsed;
@@ -188,16 +227,19 @@ namespace PopcornGenerator
             stopWatch.Start();
             while (isEnumeratorMoving)
             {
-                prevElapsed = stopWatch.ElapsedMilliseconds;
-                //print($"Before enumerator move next");
+                prevElapsed = stopWatch.ElapsedTicks / 10;
                 isEnumeratorMoving = popcornEnumerator.MoveNext();
-                //print($"After enumerator move next");
-                currElapsed = stopWatch.ElapsedMilliseconds;
-                //print($"Step miliseconds: {currElapsed - prevElapsed}");
+                currElapsed = stopWatch.ElapsedTicks / 10;
+
+                long duration = currElapsed - prevElapsed;
+
+                LogStageDuration(duration);
             }
             stopWatch.Stop();
 
-            print($"Total time miliseconds: {stopWatch.ElapsedMilliseconds}");
+#           if POPCORN_GEN__LOG_PER_FRAME
+                print($"Total time miliseconds: {stopWatch.ElapsedTicks / 10:N}");
+#           endif
         }
 
         private Plane[] GenerateCuttingPlanes()
@@ -273,6 +315,26 @@ namespace PopcornGenerator
         {
             cuttingPlanesParent.gameObject.SetActive(false);
             riggingPlanesParent.gameObject.SetActive(false);
+        }
+
+        private static void LogStageDuration(long duration)
+        {
+#           if POPCORN_GEN__LOG_PER_FRAME
+                string color = (duration < 1_000)
+                                   ? "yellow"
+                                   : (duration < 2_000)
+                                     ? "lime"
+                                     : "red";
+
+                print($"Step microseconds: <color={color}>{duration:N}</color>");
+#           endif
+        }
+
+        private static void LogStageName(string stageName)
+        {
+#           if POPCORN_GEN__LOG_PER_FRAME
+                Debug.LogWarning($"<color=orange> {stageName} </color>");
+#           endif
         }
     }
 }

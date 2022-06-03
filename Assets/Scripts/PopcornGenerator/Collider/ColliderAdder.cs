@@ -1,16 +1,23 @@
 using System.Collections.Generic;
+using System.Collections;
 using UnityEngine;
+
+using Stopwatch = System.Diagnostics.Stopwatch;
 
 namespace PopcornGenerator
 {
     internal static class ColliderAdder
     {
-        public static void AddColliders(List<RiggedSlice> riggedSlices,
-                                        List<SkinnedMeshRenderer> skinnedMeshRenderers,
-                                        Collider kernelCollider,
-                                        Transform kernelTransform)
+        public static IEnumerator AddColliders(List<RiggedSlice> riggedSlices,
+                                               List<SkinnedMeshRenderer> skinnedMeshRenderers,
+                                               Collider kernelCollider,
+                                               Transform kernelTransform,
+                                               PopcornGeneratorProperties properties)
         {
+            properties.stopwatch.Restart();
             List<Collider> colliders = new List<Collider>(riggedSlices.Count * riggedSlices[0].RiggingZonesIndices.Count);
+            yield return null;
+            properties.stopwatch.Restart();
 
             for (int sliceIndex = 0; sliceIndex < riggedSlices.Count; ++sliceIndex)
             {
@@ -22,9 +29,21 @@ namespace PopcornGenerator
 
                 for (int riggingZoneIndex = 0; riggingZoneIndex < riggedSlice.RiggingZonesIndices.Count; ++riggingZoneIndex)
                 {
+                    if (properties.stopwatch.ElapsedTicks / 10 > properties.microsecondsToYield)
+                    {
+                        yield return null;
+                        properties.stopwatch.Restart();
+                    }
+
                     HashSet<int> zoneIndices = riggedSlice.RiggingZonesIndices[riggingZoneIndex];
                     Transform bone = bones[riggingZoneIndex];
                     Bounds zoneBounds = CalculateRiggedZoneBounds(slice, zoneIndices, bone, kernelTransform);
+
+                    if (properties.stopwatch.ElapsedTicks / 10 > properties.microsecondsToYield)
+                    {
+                        yield return null;
+                        properties.stopwatch.Restart();
+                    }
 
                     BoxCollider boxCollider = bone.gameObject.AddComponent<BoxCollider>();
                     boxCollider.center = zoneBounds.center;
@@ -35,7 +54,14 @@ namespace PopcornGenerator
                 }
             }
 
-            kernelCollider.enabled = false;
+            if (properties.stopwatch.ElapsedTicks / 10 > properties.microsecondsToYield)
+            {
+                yield return null;
+                properties.stopwatch.Restart();
+            }
+
+            //kernelCollider.enabled = false;
+            Object.Destroy(kernelCollider);
             foreach (Collider collider in colliders)
             {
                 collider.enabled = true;

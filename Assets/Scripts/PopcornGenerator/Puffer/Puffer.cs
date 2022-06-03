@@ -2,6 +2,8 @@
 using System.Collections;
 using UnityEngine;
 
+using Stopwatch = System.Diagnostics.Stopwatch;
+
 namespace PopcornGenerator
 {
     internal static class Puffer
@@ -18,20 +20,36 @@ namespace PopcornGenerator
             }
         );
 
-        public static IEnumerator Puff(List<Slice> slices)
+        public static IEnumerator Puff(List<Slice> slices, PopcornGeneratorProperties properties)
         {
             for (int sliceIndex = 0; sliceIndex < slices.Count; ++sliceIndex)
             {
-                yield return null;
+                //yield return null;
+                //Debug.LogError($"After initial yield");
 
                 List<Vertex> kernelvertices = slices[sliceIndex].Mesh.Vertices;
                 List<Triangle> kerneltriangles = slices[sliceIndex].Mesh.SubMeshTriangles[Mesh.kernelSubmeshIndex];
                 Border border = slices[sliceIndex].Border;
 
                 yield return null;
+                //Debug.LogError($"After gathering data");
 
-                var (firstCurveIndices, secondCurveIndices) = GetCurvesIndices(kernelvertices, border);
+                //var (firstCurveIndices, secondCurveIndices) = GetCurvesIndices(kernelvertices, border);
+                int curveIndicesCount = border.IndicesList.Count / 2;
+                List<int> firstCurveIndices = new List<int>(curveIndicesCount);
+                List<int> secondCurveIndices = new List<int>(curveIndicesCount);
+
+                IEnumerator curveGenerator = GetCurvesIndices(kernelvertices, border, firstCurveIndices, secondCurveIndices,
+                                                              properties.stopwatch, properties.microsecondsToYield);
                 yield return null;
+                //Debug.LogError($"After preparing to calculate curve indices");
+
+                while (curveGenerator.MoveNext())
+                {
+                    yield return null;
+                }
+
+                //Debug.LogError($"After calculating curve indices");
 
 #               if DEBUG && false
                     CreateCubesOnBorders(slices, sliceIndex, firstCurveIndices, secondCurveIndices);
@@ -44,28 +62,52 @@ namespace PopcornGenerator
                 int segments = Mathf.Min(firstCurveIndices.Count, secondCurveIndices.Count) - 2;
                 int verticesPerSegment = 22;
 
+                var puffVertices = new List<Vertex>(segments * verticesPerSegment);
                 yield return null;
-                List<Vertex> puffVertices = GeneratePuffVertices(kernelvertices, segments, verticesPerSegment,
-                                                                 firstCurveIndices, secondCurveIndices);
-                yield return null;
+                IEnumerator puffVerticesGenerator = GeneratePuffVertices(kernelvertices, segments, verticesPerSegment,
+                                                                         firstCurveIndices, secondCurveIndices, puffVertices,
+                                                                         properties.stopwatch, properties.microsecondsToYield,
+                                                                         properties.curveDirectionMaxMagnitude,
+                                                                         properties.curveDirectionCutoffPercent);
+                while (puffVerticesGenerator.MoveNext())
+                {
+                    yield return null;
+                }
+                //Debug.LogError($"After generating vertices");
+
                 List<Triangle> puffTriangles = GeneratePuffTriangles(kernelvertices, segments, verticesPerSegment,
                                                                      puffVertices);
+                yield return null;
+                //Debug.LogError($"After generating triangles");
 #               if false
                     yield return null;
                     RecalculateNormals(puffVertices, puffTriangles);
 #               endif
 
-                yield return null;
-                GenerateUVCoordinates(puffVertices, puffTriangles);
+                //GenerateUVCoordinates(puffVertices, puffTriangles);
+                IEnumerator uvGenerator = GenerateUVCoordinates(puffVertices, puffTriangles, properties.stopwatch,
+                                                                properties.microsecondsToYield);
+                while (uvGenerator.MoveNext())
+                {
+                    yield return null;
+                }
+                //Debug.LogError($"After generating UV coordinates");
 
-                yield return null;
-                FlipTrianglesIfFacingInwards(kernelvertices, puffVertices, puffTriangles);
+                IEnumerator flippingTriangles = FlipTrianglesIfFacingInwards(kernelvertices, puffVertices, puffTriangles,
+                                                                             properties.stopwatch, properties.microsecondsToYield);
+                while (flippingTriangles.MoveNext())
+                {
+                    yield return null;
+                }
+                //Debug.LogError($"After flipping triangles");
 
-                yield return null;
                 AddBaseIndexToTriangleIndices(puffTriangles, kernelvertices.Count);
+                //yield return null;
+                //Debug.LogError($"After adding base index");
 
-                yield return null;
                 AddVerticesAndTrianglesToMesh(puffVertices, puffTriangles, slices[sliceIndex].Mesh);
+                yield return null;
+                //Debug.LogError($"After adding base index, vertices and triangles to mesh");
             }
         }
 
@@ -149,6 +191,73 @@ namespace PopcornGenerator
             return maxIndex;
         }
 
+        private static IEnumerator GetCurvesIndices(List<Vertex> vertices, Border border,
+                                                    List<int> firstCurveIndices, List<int> secondCurveIndices,
+                                                    Stopwatch sw, long microsecondsToYield)
+        {
+            int curveIndicesCount = border.IndicesList.Count / 2;
+
+            bool[] visitedIndices = new bool[border.IndicesList.Count];
+            int bottomIndex = MinYIndex(border.IntersectingIndices, vertices);
+            int topIndex = MaxYIndex(border.IntersectingIndices, vertices);
+            int currentIndex;
+
+            firstCurveIndices.Add(topIndex);
+            secondCurveIndices.Add(topIndex);
+            
+            yield return null;
+            sw.Restart();
+
+            for (int curveIndex = 0; curveIndex < 2; ++curveIndex)
+            {
+                List<int> curveIndices = curveIndex == 0 ? firstCurveIndices : secondCurveIndices;
+
+                currentIndex = topIndex;
+                int maxSteps = Mathf.RoundToInt(curveIndicesCount * 1.3f);
+                int step = 0;
+                while (currentIndex != bottomIndex && step++ < maxSteps)
+                {
+                    // Find closest unvisited index
+                    float minSqrDist = float.MaxValue;
+                    int closestUnvisitedIndex = -1;
+                    int closestUnvisitedIndexInVisitedIndices = -1;
+                    for (int index = 0; index < border.IndicesList.Count; ++index)
+                    {
+                        int borderIndex = border.IndicesList[index];
+
+                        if (borderIndex != currentIndex && !visitedIndices[index])
+                        {
+                            float sqrDist = (vertices[borderIndex].Position - vertices[currentIndex].Position).sqrMagnitude;
+                            if (sqrDist < minSqrDist)
+                            {
+                                minSqrDist = sqrDist;
+                                closestUnvisitedIndex = borderIndex;
+                                closestUnvisitedIndexInVisitedIndices = index;
+                            }
+                        }
+                    }
+
+                    if (sw.ElapsedTicks / 10 > microsecondsToYield)
+                    {
+                        yield return null;
+                        sw.Restart();
+                        //Debug.LogError($"After ElapsedTicks");
+                    }
+
+                    // Make sure top index is not visited so that in the next iteration it will be added
+                    // in the list again
+                    if (closestUnvisitedIndex != bottomIndex)
+                    {
+                        visitedIndices[closestUnvisitedIndexInVisitedIndices] = true;
+                    }
+                    curveIndices.Add(closestUnvisitedIndex);
+                    currentIndex = closestUnvisitedIndex;
+                }
+                yield return null;
+            }
+        }
+
+        #if false  // GetCurvesIndices sequencial
         private static (List<int>, List<int>) GetCurvesIndices(List<Vertex> vertices, Border border)
         {
             int curveIndicesCount = border.IndicesList.Count / 2;
@@ -204,7 +313,59 @@ namespace PopcornGenerator
 
             return (firstCurveIndices, secondCurveIndices);
         }
+        #endif
 
+        private static IEnumerator GeneratePuffVertices(List<Vertex> vertices,
+                                                        int segments,
+                                                        int verticesPerSegment,
+                                                        List<int> firstCurveIndices,
+                                                        List<int> secondCurveIndices,
+                                                        List<Vertex> puffVertices,
+                                                        Stopwatch sw, long microsecondsToYield,
+                                                        float curveDirectionMaxMagnitude, float curveDirectionCutoffPercent)
+        {
+            sw.Restart();
+            //float dirPercent = 0.9f;
+            //float dirMaxMagniture = 3.0f;
+
+            for (int lineIndex = 0; lineIndex < segments; ++lineIndex)
+            {
+                Vertex v0 = vertices[firstCurveIndices[lineIndex + 1]];
+                Vertex v1 = vertices[secondCurveIndices[lineIndex + 1]];
+
+                Vector3 dir = v1.Position - v0.Position;
+
+                Vector3 dirToLook = -Vector3.Lerp(v0.Normal, v1.Normal, 0.5f).normalized;
+                float lineT = (float)lineIndex / (segments - 1);
+
+                puffVertices.Add(v0);
+
+                for (int iteration = 0; iteration < verticesPerSegment - 2; ++iteration)
+                {
+                    float t = (float)iteration / (verticesPerSegment - 3);
+
+                    float angle = t * Mathf.PI;
+
+                    Vertex vInterp = Vertex.LerpUnclamped(v0, v1, t);
+                    float positionT = Mathf.LerpUnclamped(curve.Evaluate(t), t, lineT);
+
+                    vInterp.Position = Vector3.LerpUnclamped(v0.Position, v1.Position, positionT)
+                        + Mathf.Sin(angle) * Mathf.Min(dir.magnitude, curveDirectionMaxMagnitude) * curveDirectionCutoffPercent * dirToLook;
+
+                    puffVertices.Add(vInterp);
+
+                    if (sw.ElapsedTicks / 10 > microsecondsToYield)
+                    {
+                        yield return null;
+                        sw.Restart();
+                    }
+                }
+
+                puffVertices.Add(v1);
+            }
+        }
+
+        #if false // GeneratePuffVertices sequencial
         private static List<Vertex> GeneratePuffVertices(List<Vertex> vertices,
                                                          int segments,
                                                          int verticesPerSegment,
@@ -249,7 +410,7 @@ namespace PopcornGenerator
 
                 puffVertices.Add(v1);
 
-#if false
+                #if false
                     interpolatedVertices[interpolatedIndex] = Vertex.Lerp(
                         vertices[firstCurveIndices[interpolatedIndex + 1]],
                         vertices[secondCurveIndices[interpolatedIndex + 1]],
@@ -262,11 +423,12 @@ namespace PopcornGenerator
                     );
                     interpolatedVertices[interpolatedIndex].UV = Vector2.zero;
                     vertices.Add(interpolatedVertices[interpolatedIndex]);
-#endif
+                #endif
             }
 
             return puffVertices;
         }
+        #endif
 
         private static bool ShouldFlipTriangle(Vector3 v0, Vector3 v1, Vector3 v2, Vector3 meanNormal)
         {
@@ -281,6 +443,16 @@ namespace PopcornGenerator
         {
             int trianglesNumber = (segments - 1) * (verticesPerSegment - 1) * 2;
             List<Triangle> puffTriangles = new List<Triangle>(trianglesNumber);
+
+            // Fill hole at the top of the slice. It is kind of hard to explain where
+            // these holes form. If you are curious, disable this code and look at the
+            // top part of the slice. There should be a small hole.
+            for (int vertexIndex = 1; vertexIndex < verticesPerSegment - 1; ++vertexIndex)
+            {
+                puffTriangles.Add(new Triangle(0, vertexIndex, vertexIndex + 1));
+            }
+
+            // Hole at the bottom should not be visible, so we don't fill it
 
             for (int lineIndex = 0; lineIndex < segments - 1; ++lineIndex)
             {
@@ -335,7 +507,7 @@ namespace PopcornGenerator
                     #endif
                 }
 
-#if false && false
+                #if false && false
                 int iLine0V0 = firstCurveIndices[lineIndex + 1];
                 int iLine0VInterp = interpolatedVertices[lineIndex, 0];
 
@@ -367,7 +539,7 @@ namespace PopcornGenerator
                     {
                         triangles.Add(new Triangle(iLine1VInterp1, iLine1VInterp0, iLine0VInterp0));
                         // FlipNormals
-#if false
+                        #if false
                             Vertex v = vertices[iLine1VInterp1];
                             v.Normal *= -1.0f;
                             vertices[iLine1VInterp1] = v;
@@ -379,7 +551,7 @@ namespace PopcornGenerator
                             v = vertices[iLine0VInterp0];
                             v.Normal *= -1.0f;
                             vertices[iLine0VInterp0] = v;
-#endif
+                        #endif
                     }
                     if (Vector3.Angle(n2R, n2C) > 90)
                     {
@@ -389,7 +561,7 @@ namespace PopcornGenerator
                     {
                         triangles.Add(new Triangle(iLine0VInterp1, iLine1VInterp1, iLine0VInterp0));
                         // FlipNormals
-#if false
+                        #if false
                             Vertex v = vertices[iLine0VInterp1];
                             v.Normal *= -1.0f;
                             vertices[iLine0VInterp1] = v;
@@ -401,7 +573,7 @@ namespace PopcornGenerator
                             v = vertices[iLine0VInterp0];
                             v.Normal *= -1.0f;
                             vertices[iLine0VInterp0] = v;
-#endif
+                        #endif
                     }
                 }
 
@@ -414,7 +586,7 @@ namespace PopcornGenerator
 
                 triangles.Add(new Triangle(iLine0VInterpEnd, iLine1VInterpEnd, iLine1V1));
                 triangles.Add(new Triangle(iLine0VInterpEnd, iLine1V1, iLine0V1));
-#endif
+                #endif
             }
             return puffTriangles;
         }
@@ -457,6 +629,78 @@ namespace PopcornGenerator
             }
         }
 
+        private static IEnumerator GenerateUVCoordinates(List<Vertex> puffVertices, List<Triangle> puffTriangles, Stopwatch sw, long microsecondsToYield)
+        {
+            sw.Restart();
+            Vector3 puffCenter = Vector3.zero;
+            foreach (Vertex v in puffVertices)
+            {
+                puffCenter += v.Position;
+            }
+            puffCenter /= puffVertices.Count;
+
+            Vector3 meanPuffNormal = Vector3.zero;
+            foreach (Triangle t in puffTriangles)
+            {
+                Vector3 v0 = puffVertices[t.I0].Position;
+                Vector3 v1 = puffVertices[t.I1].Position;
+                Vector3 v2 = puffVertices[t.I2].Position;
+
+                meanPuffNormal += Vector3.Cross(v1 - v0, v2 - v0);
+
+                if (sw.ElapsedTicks / 10 > microsecondsToYield)
+                {
+                    yield return null;
+                    sw.Restart();
+                }
+            }
+            meanPuffNormal.Normalize();
+
+            Vector3 closestDirection = Vector3.Angle(meanPuffNormal, Vector3.forward) < Vector3.Angle(meanPuffNormal, Vector3.back)
+                                       ? Vector3.forward : Vector3.back;
+            Quaternion verticesRotation = Quaternion.FromToRotation(meanPuffNormal, closestDirection);
+
+            Bounds uvBounds = new Bounds();
+            for (int puffVertexIndex = 0; puffVertexIndex < puffVertices.Count; ++puffVertexIndex)
+            {
+                Vertex vertex = puffVertices[puffVertexIndex];
+                Vector3 position = vertex.Position;
+                position -= puffCenter; // Translate vertex to origin
+                position = Vector3.ProjectOnPlane(position, meanPuffNormal); // Project vertex on plane
+                position = verticesRotation * position; // Rotate vertex
+
+                Vector2 uv = new Vector2(position.x, position.y);
+                vertex.UV = uv;
+                puffVertices[puffVertexIndex] = vertex;
+
+                uvBounds.Encapsulate((Vector3)uv);
+
+                if (sw.ElapsedTicks / 10 > microsecondsToYield)
+                {
+                    yield return null;
+                    sw.Restart();
+                }
+            }
+
+            float factor = 0.95F / uvBounds.size.y;
+
+            for (int puffVertexIndex = 0; puffVertexIndex < puffVertices.Count; ++puffVertexIndex)
+            {
+                Vertex vertex = puffVertices[puffVertexIndex];
+                // the center of the whole uv coordinates is in (0, 0)
+                vertex.UV *= factor;
+                vertex.UV += new Vector2(0.5F, 0.5F);
+                puffVertices[puffVertexIndex] = vertex;
+
+                if (sw.ElapsedTicks / 10 > microsecondsToYield)
+                {
+                    yield return null;
+                    sw.Restart();
+                }
+            }
+        }
+
+        #if false // GenerateUVCoordinates sequencial
         private static void GenerateUVCoordinates(List<Vertex> puffVertices, List<Triangle> puffTriangles)
         {
             Vector3 puffCenter = Vector3.zero;
@@ -508,7 +752,55 @@ namespace PopcornGenerator
                 puffVertices[puffVertexIndex] = vertex;
             }
         }
+        #endif
 
+        private static IEnumerator FlipTrianglesIfFacingInwards(List<Vertex> kernelVertices, List<Vertex> puffVertices,
+                                                                List<Triangle> puffTriangles, Stopwatch sw, long microsecondsToYield)
+        {
+            sw.Restart();
+            Vector3 meanKernelNormal = Vector3.zero;
+            foreach (Vertex v in kernelVertices)
+            {
+                meanKernelNormal += v.Normal;
+            }
+            meanKernelNormal.Normalize();
+
+            Vector3 meanPuffNormal = Vector3.zero;
+            foreach (Triangle t in puffTriangles)
+            {
+                Vector3 v0 = puffVertices[t.I0].Position;
+                Vector3 v1 = puffVertices[t.I1].Position;
+                Vector3 v2 = puffVertices[t.I2].Position;
+
+                meanPuffNormal += Vector3.Cross(v1 - v0, v2 - v0);
+
+                if (sw.ElapsedTicks / 10 > microsecondsToYield)
+                {
+                    yield return null;
+                    sw.Restart();
+                }
+            }
+            meanPuffNormal.Normalize();
+
+            if (Vector3.Angle(meanKernelNormal, meanPuffNormal) < 90.0F)
+            {
+                // Flip triangles
+                for (int triangleIndex = 0; triangleIndex < puffTriangles.Count; ++triangleIndex)
+                {
+                    Triangle triangle = puffTriangles[triangleIndex];
+                    Triangle newTriangle = new Triangle(triangle.I0, triangle.I2, triangle.I1);
+                    puffTriangles[triangleIndex] = newTriangle;
+
+                    if (sw.ElapsedTicks / 10 > microsecondsToYield)
+                    {
+                        yield return null;
+                        sw.Restart();
+                    }
+                }
+            }
+        }
+        
+        #if false // FlipTrianglesIfFacingInwards sequencial
         private static void FlipTrianglesIfFacingInwards(List<Vertex> kernelVertices, List<Vertex> puffVertices,
                                                          List<Triangle> puffTriangles)
         {
@@ -541,6 +833,7 @@ namespace PopcornGenerator
                 }
             }
         }
+        #endif
 
         private static void AddBaseIndexToTriangleIndices(List<Triangle> triangles, int baseIndex)
         {

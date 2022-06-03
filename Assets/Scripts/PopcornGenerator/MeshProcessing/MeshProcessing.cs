@@ -2,6 +2,8 @@ using System.Collections.Generic;
 using System.Collections;
 using UnityEngine;
 
+using Stopwatch = System.Diagnostics.Stopwatch;
+
 #if DEBUG
 using BoneTool.Script.Runtime;
 #endif
@@ -14,9 +16,10 @@ namespace PopcornGenerator
                                                                      Transform kernelTransform,
                                                                      MeshRenderer kernelMeshRenderer,
                                                                      Material puffMaterial,
-                                                                     List<SkinnedMeshRenderer> skinnedMeshRenderers
-        )
+                                                                     List<SkinnedMeshRenderer> skinnedMeshRenderers,
+                                                                     PopcornGeneratorProperties properties)
         {
+            properties.stopwatch.Restart();
             for (int riggedSliceIndex = 0; riggedSliceIndex < riggedSlices.Count; ++riggedSliceIndex)
             {
                 RiggedSlice riggedSlice = riggedSlices[riggedSliceIndex];
@@ -25,30 +28,72 @@ namespace PopcornGenerator
 
                 //Utils.TransformVerticesToLocalSpace(riggedSlice.Slice.Mesh.Vertices, kernelTransform);
                 
+                if (properties.stopwatch.ElapsedTicks / 10 > properties.microsecondsToYield)
+                {
+                    yield return null;
+                    //Debug.LogError($"Zeroth");
+                    properties.stopwatch.Restart();
+                }
+
                 // Only vertices are transformed to local space. BonePositions are still
                 // in world space. This function uses world space coordinates.
                 Transform[] bones = CreateRiggedSliceBonesTransform(riggedSlice, sliceGO.transform);
 
-                yield return null;
+                if (properties.stopwatch.ElapsedTicks / 10 > properties.microsecondsToYield)
+                {
+                    yield return null;
+                    //Debug.LogError($"First");
+                    properties.stopwatch.Restart();
+                }
 
                 UnityEngine.Mesh unityMesh = CreateUnityMesh(riggedSlice, riggedSliceIndex, kernelTransform, bones);
+
+                if (properties.stopwatch.ElapsedTicks / 10 > properties.microsecondsToYield)
+                {
+                    yield return null;
+                    //Debug.LogError($"Second");
+                    properties.stopwatch.Restart();
+                }
+
                 AddMeshFilterToSliceGO(sliceGO, unityMesh);
-                var skm = AddSkinnedMeshRendererToSliceGO(sliceGO, unityMesh, kernelMeshRenderer.material, puffMaterial, bones);
+
+                if (properties.stopwatch.ElapsedTicks / 10 > properties.microsecondsToYield)
+                {
+                    yield return null;
+                    //Debug.LogError($"Third");
+                    properties.stopwatch.Restart();
+                }
+
+                var skm = AddSkinnedMeshRendererToSliceGO(sliceGO, unityMesh, kernelMeshRenderer.material, puffMaterial,
+                                                          bones, riggedSlice.RiggingZonesIndices, riggedSlice.Slice.Mesh.Vertices);
                 skinnedMeshRenderers.Add(skm);
+
+                if (properties.stopwatch.ElapsedTicks / 10 > properties.microsecondsToYield)
+                {
+                    yield return null;
+                    //Debug.LogError($"Forth");
+                    properties.stopwatch.Restart();
+                }
 
                 //unityMesh.RecalculateNormals();
 
 #               if DEBUG
-                AddBoneVisualizerToSliceGO(sliceGO, bones[0]);
+                    AddBoneVisualizerToSliceGO(sliceGO, bones[0]);
 
-                //ShowSliceBorderIndices(sliceGO, riggedSlice.Slice, colors[riggedSliceIndex % colors.Length]);
-                //ShowSliceBorderIntersectingPlanesIndices(sliceGO, riggedSlice.Slice, colors[riggedSliceIndex % colors.Length]);
-                //ShowRiggedSliceBones(sliceGO, riggedSlice, colors[riggedSliceIndex % colors.Length]);
-                //ShowRiggedSliceZoneVertices(sliceGO, riggedSlice);
+                    //ShowSliceBorderIndices(sliceGO, riggedSlice.Slice, colors[riggedSliceIndex % colors.Length]);
+                    //ShowSliceBorderIntersectingPlanesIndices(sliceGO, riggedSlice.Slice, colors[riggedSliceIndex % colors.Length]);
+                    //ShowRiggedSliceBones(sliceGO, riggedSlice, colors[riggedSliceIndex % colors.Length]);
+                    //ShowRiggedSliceZoneVertices(sliceGO, riggedSlice);
 
-                //ExportSliceAsObj(sliceGO, riggedSliceIndex, $@"{System.IO.Directory.GetCurrentDirectory()}\RuntimeExports\Slices");
+                    //ExportSliceAsObj(sliceGO, riggedSliceIndex, $@"{System.IO.Directory.GetCurrentDirectory()}\RuntimeExports\Slices");
+
+                    if (properties.stopwatch.ElapsedTicks / 10 > properties.microsecondsToYield)
+                    {
+                        yield return null;
+                        //Debug.LogError($"Fifth");
+                        properties.stopwatch.Restart();
+                    }
 #               endif
-                yield return null;
             }
         }
 
@@ -110,13 +155,54 @@ namespace PopcornGenerator
                                                                            UnityEngine.Mesh unityMesh,
                                                                            Material kernelMaterial,
                                                                            Material puffMaterial,
-                                                                           Transform[] bones)
+                                                                           Transform[] bones,
+                                                                           List<HashSet<int>> riggingZonesIndices,
+                                                                           List<Vertex> sliceVertices)
         {
             SkinnedMeshRenderer sliceSkinnedMeshRenderer = sliceGO.AddComponent<SkinnedMeshRenderer>();
+            Material puffMaterialClone = Object.Instantiate(puffMaterial);
+
             sliceSkinnedMeshRenderer.sharedMesh = unityMesh;
-            sliceSkinnedMeshRenderer.materials = new Material[] { kernelMaterial, puffMaterial };
+            sliceSkinnedMeshRenderer.materials = new Material[] { kernelMaterial, puffMaterialClone };
             sliceSkinnedMeshRenderer.rootBone = bones[0];
             sliceSkinnedMeshRenderer.bones = bones;
+
+            for (int boneIndex = 0; boneIndex < bones.Length; ++boneIndex)
+            //foreach (Transform bone in bones)
+            {
+                puffMaterialClone.SetVector($"_BurnPoint{boneIndex}", Vector4.zero);
+                puffMaterialClone.SetFloat($"_BurnRadius{boneIndex}", 0.0F);
+
+                Transform bone = bones[boneIndex];
+                HashSet<int> indices = riggingZonesIndices[boneIndex];
+
+                int randomIndicesIndex = Random.Range(0, indices.Count);
+                int randomIndex = -1;
+                foreach (int index in indices)
+                {
+                    if (randomIndicesIndex == 0)
+                    {
+                        randomIndex = index;
+                        break;
+                    }
+                    --randomIndicesIndex;
+                }
+
+                Vector2 uv = sliceVertices[randomIndex].UV;
+
+
+                bone.gameObject.layer = LayerMask.NameToLayer("Burning");
+                Burner b = bone.gameObject.AddComponent<Burner>();
+
+                b.BurnTime = 1.0F;
+                b.BurnCenter = uv;
+                b.FinalBurnRadius = 0.25F;
+                b.BurnPointIndex = boneIndex;
+                b.PuffMaterial = puffMaterialClone;
+
+                //Debug.Log($"Burn point {boneIndex} position: {uv:F5}");
+            }
+
             return sliceSkinnedMeshRenderer;
         }
 

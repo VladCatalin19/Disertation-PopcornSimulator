@@ -1,33 +1,47 @@
 ﻿using System.Collections.Generic;
+using System.Collections;
 using UnityEngine;
+
+using Stopwatch = System.Diagnostics.Stopwatch;
 
 namespace PopcornGenerator
 {
     internal static class Animator
     {
-        public static void Animate(List<SkinnedMeshRenderer> skinnedMeshRenderers, Transform centerOfKernel,
-                                   float minDuration, float maxDuration)
+        public static IEnumerator Animate(List<SkinnedMeshRenderer> skinnedMeshRenderers, Transform centerOfKernel,
+                                          PopcornGeneratorProperties properties)
         {
+            List<Animation> animations = new List<Animation>(skinnedMeshRenderers.Count * skinnedMeshRenderers[0].bones.Length);
+            
+            yield return null;
+            properties.stopwatch.Restart();
+
             foreach (SkinnedMeshRenderer smr in skinnedMeshRenderers)
             {
-                Animate(smr, centerOfKernel, minDuration, maxDuration);
+                Transform[] bones = smr.bones;
+
+                for (int boneIndex = 1; boneIndex < bones.Length; ++boneIndex)
+                {
+                    Animation a = AnimateBone(bones[boneIndex], bones[boneIndex - 1], centerOfKernel, boneIndex, bones.Length - 1,
+                                              properties.minExpansionTime, properties.maxExpansionTime, properties.animationJitter);
+                    animations.Add(a);
+
+                    if (properties.stopwatch.ElapsedTicks / 10 > properties.microsecondsToYield)
+                    {
+                        yield return null;
+                        properties.stopwatch.Restart();
+                    }
+                }
             }
-        }
 
-        public static void Animate(SkinnedMeshRenderer skinnedMeshRenderer, Transform centerOfKernel,
-                                   float minDuration, float maxDuration)
-        {
-            Transform[] bones = skinnedMeshRenderer.bones;
-
-            for (int boneIndex = 1; boneIndex < bones.Length; ++boneIndex)
+            foreach (Animation a in animations)
             {
-                AnimateBone(bones[boneIndex], bones[boneIndex - 1], centerOfKernel, boneIndex, bones.Length - 1,
-                            minDuration, maxDuration);
+                a.Play("Expansion");
             }
         }
 
-        private static void AnimateBone(Transform bone, Transform previousBone, Transform centerOfKernel,
-                                        int depth, int maxDepth, float minDuration, float maxDuration)
+        private static Animation AnimateBone(Transform bone, Transform previousBone, Transform centerOfKernel,
+                                             int depth, int maxDepth, float minDuration, float maxDuration, float animationJitter)
         {
             Animation animation = bone.gameObject.AddComponent<Animation>();
             QuaternionCurves curves = new QuaternionCurves();
@@ -35,7 +49,7 @@ namespace PopcornGenerator
             Quaternion localRotation = bone.localRotation;
             Vector3 localDirectionToPreviousBone = GetLocalDirectionToPreviousBone(bone, previousBone);
             Vector3 localDirectionToCenterOfKernel = GetLocalDirectionToCenterOfKernel(bone, centerOfKernel)
-                                                     + GetJitterToLocalDirectionToPreviousBone(localDirectionToPreviousBone);
+                                                     + GetJitterToLocalDirectionToPreviousBone(localDirectionToPreviousBone, animationJitter);
 
             Quaternion desiredLocalRotation = GetDesiredRotation(localRotation, localDirectionToPreviousBone,
                                                                  localDirectionToCenterOfKernel, depth, maxDepth);
@@ -45,7 +59,9 @@ namespace PopcornGenerator
             curves.AllocateCurves();
             InitializeQuaternionCuves(curves, localRotation, desiredLocalRotation, minDuration, maxDuration);
             AnimationClip clip = CreateAnnimationClip(curves);
-            StartAnnimation(animation, clip);
+            animation.AddClip(clip, "Expansion");
+
+            return animation;
         }
 
         private static Vector3 GetLocalDirectionToPreviousBone(Transform bone, Transform previousBone)
@@ -58,10 +74,10 @@ namespace PopcornGenerator
             return bone.InverseTransformDirection((centerOfKernel.position - bone.position).normalized);
         }
 
-        private static Vector3 GetJitterToLocalDirectionToPreviousBone(Vector3 localDirectionToPreviousBone)
+        private static Vector3 GetJitterToLocalDirectionToPreviousBone(Vector3 localDirectionToPreviousBone, float animationJitter)
         {
             Quaternion q = Quaternion.FromToRotation(Vector3.forward, localDirectionToPreviousBone);
-            Vector3 jitter = q * (Vector3)Random.insideUnitCircle * 0.3F;
+            Vector3 jitter = q * (Vector3)Random.insideUnitCircle * animationJitter;
             return jitter;
         }
 
@@ -70,9 +86,9 @@ namespace PopcornGenerator
         {
             Quaternion desiredLocalRotation = Quaternion.FromToRotation(localDirectionToPreviousBone,
                                                                         localDirectionToCenterOfKernel);
-            // TODO min and max should be related to number of rigging planes
-            //float t = Mathf.Lerp(0.7F, 0.5f, (float)depth / (maxDepth + 1));
-            float t = Mathf.Lerp(0.35F, 0.2F, (float)depth / (maxDepth + 1));
+            float initialBoneRotationT = 0.075F * maxDepth;
+            float finalBoneRotationT = 0.05F * maxDepth;
+            float t = Mathf.Lerp(initialBoneRotationT, finalBoneRotationT, (float)depth / (maxDepth + 1));
 
             desiredLocalRotation = Quaternion.Slerp(localRotation, desiredLocalRotation, t);
             return desiredLocalRotation;
@@ -107,12 +123,6 @@ namespace PopcornGenerator
             clip.SetCurve("", typeof(Transform), "localRotation.z", curves.CurveZ);
             clip.SetCurve("", typeof(Transform), "localRotation.w", curves.CurveW);
             return clip;
-        }
-
-        private static void StartAnnimation(Animation animation, AnimationClip clip)
-        {
-            animation.AddClip(clip, "Expansion");
-            animation.Play("Expansion");
         }
 
 #       if DEBUG

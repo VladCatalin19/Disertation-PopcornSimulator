@@ -13,11 +13,11 @@ namespace PopcornGenerator
         private readonly bool hasNormals;
         private readonly bool hasUVs;
 
-        public Mesh(bool hasNormals = false, bool hasUVs = false)
+        public Mesh(int vertexCapacity = 0, int triangleCapacity = 0, bool hasNormals = false, bool hasUVs = false)
         {
-            vertices = new List<Vertex>();
-            subMeshTriangles = new List<List<Triangle>>();
-            subMeshTriangles.Add(new List<Triangle>());
+            vertices = new List<Vertex>(vertexCapacity);
+            subMeshTriangles = new List<List<Triangle>>(1);
+            subMeshTriangles.Add(new List<Triangle>(triangleCapacity));
             this.hasNormals = hasNormals;
             this.hasUVs = hasUVs;
         }

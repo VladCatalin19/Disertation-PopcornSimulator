@@ -21,14 +21,14 @@ Material:
   m_PrefabInstance: {fileID: 0}
   m_PrefabAsset: {fileID: 0}
   m_Name: puff
-  m_Shader: {fileID: 4800000, guid: 933532a4fcc9baf4fa0491de14d08ed7, type: 3}
+  m_Shader: {fileID: -6465566751694194690, guid: 4cda00a37e3a68941a09359a1f67f751,
+    type: 3}
   m_ShaderKeywords: 
   m_LightmapFlags: 4
   m_EnableInstancingVariants: 0
   m_DoubleSidedGI: 0
-  m_CustomRenderQueue: 2000
-  stringTagMap:
-    RenderType: Opaque
+  m_CustomRenderQueue: -1
+  stringTagMap: {}
   disabledShaderPasses: []
   m_SavedProperties:
     serializedVersion: 3
@@ -96,8 +96,16 @@ Material:
     m_Floats:
     - Vector1_a30d566a1a7b4207b3cca69af113e6cd: 0.12
     - _AlphaClip: 0
+    - _Ambient_Occlusion: 1
     - _Blend: 0
     - _BumpScale: 1
+    - _BurnRadius0: 0
+    - _BurnRadius1: 0
+    - _BurnRadius2: 0
+    - _BurnRadius3: 0
+    - _BurnRadius4: 0
+    - _BurnRadius5: 0
+    - _BurnRadius6: 0
     - _ClearCoatMask: 0
     - _ClearCoatSmoothness: 0
     - _ConvertDistance: 0.5
@@ -111,12 +119,13 @@ Material:
     - _GlossMapScale: 0
     - _Glossiness: 0
     - _GlossyReflections: 0
+    - _Metalic: 0
     - _Metallic: 0
     - _OcclusionStrength: 1
     - _Parallax: 0.005
     - _QueueOffset: 0
     - _ReceiveShadows: 1
-    - _Smoothness: 0
+    - _Smoothness: 0.04
     - _SmoothnessTextureChannel: 0
     - _SpecularHighlights: 1
     - _SrcBlend: 1
@@ -127,10 +136,20 @@ Material:
     m_Colors:
     - Color_ed21c9245ef4438bb937b95d1b922c8c: {r: 1, g: 1, b: 1, a: 0}
     - _BaseColor: {r: 1, g: 1, b: 1, a: 1}
+    - _BurnPoint0: {r: 0, g: 0, b: 0, a: 0}
+    - _BurnPoint1: {r: 0, g: 0, b: 0, a: 0}
+    - _BurnPoint2: {r: 0, g: 0, b: 0, a: 0}
+    - _BurnPoint3: {r: 0, g: 0, b: 0, a: 0}
+    - _BurnPoint4: {r: 0, g: 0, b: 0, a: 0}
+    - _BurnPoint5: {r: 0, g: 0, b: 0, a: 0}
+    - _BurnPoint6: {r: 0, g: 0, b: 0, a: 0}
     - _Color: {r: 1, g: 1, b: 1, a: 1}
+    - _Emission: {r: 0.003921569, g: 0.003921569, b: 0.003921569, a: 0}
     - _EmissionColor: {r: 0, g: 0, b: 0, a: 1}
+    - _FirstColor: {r: 0.9137255, g: 0.9137255, b: 0.8196079, a: 0}
     - _PlaneNormal: {r: 1, g: 0, b: 0, a: 0}
     - _PlanePoint: {r: -4.81, g: 0, b: 0, a: 0}
     - _PlaneVector: {r: 0, g: 0, b: 0, a: 0}
+    - _SecondColor: {r: 0.9254902, g: 0.9254902, b: 0.9058824, a: 0}
     - _SpecColor: {r: 0.2, g: 0.2, b: 0.2, a: 1}
   m_BuildTextureStacks: []
