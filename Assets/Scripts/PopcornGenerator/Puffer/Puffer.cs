@@ -60,7 +60,7 @@ namespace PopcornGenerator
 #               endif
 
                 int segments = Mathf.Min(firstCurveIndices.Count, secondCurveIndices.Count) - 2;
-                int verticesPerSegment = 22;
+                int verticesPerSegment = 22; // TODO make configurable
 
                 var puffVertices = new List<Vertex>(segments * verticesPerSegment);
                 yield return null;

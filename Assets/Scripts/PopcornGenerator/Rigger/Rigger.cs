@@ -108,7 +108,7 @@ namespace PopcornGenerator
                 #if true
                 Vector3 actualCenter = CalculateZoneCenter(riggedSlice.Slice.Mesh.Vertices,
                                                            riggedSlice.RiggingZonesIndices[riggingZoneIndex]);
-                if (sw.ElapsedTicks / 10 > 1_200)
+                if (sw.ElapsedTicks / 10 > microsecondsToYield)
                 {
                     yield return null;
                     sw.Restart();
@@ -550,6 +550,19 @@ namespace PopcornGenerator
                         continue;
                     }
 
+                    if (riggingZoneIndex == riggedSlice.RiggingZonesIndices.Count - 1)
+                    {
+                        BoneWeight boneWeight0 = new BoneWeight()
+                        {
+                            boneIndex0 = riggedSlice.BonePositions.Length - 1,
+                            weight0 = 0.75F,
+                            boneIndex1 = riggedSlice.BonePositions.Length - 2,
+                            weight1 = 0.25F,
+                        };
+                        riggedSlice.BoneWeights[vertexIndex] = boneWeight0;
+                        continue;
+                    }
+
                     Vector3 vertexPosition = riggedSlice.Slice.Mesh.Vertices[vertexIndex].Position;
 
                     // Find closest 3 bones
@@ -601,7 +614,7 @@ namespace PopcornGenerator
                     }
 
                     float totalDist = 1.0F / minSqrDist0 + 1.0F / minSqrDist1
-                                    + 1.0F / minSqrDist2 + 1.0F / minSqrDist3;
+                                    + 1.0F / minSqrDist2;// + 1.0F / minSqrDist3;
 
                     BoneWeight boneWeight = new BoneWeight()
                     {
@@ -611,8 +624,8 @@ namespace PopcornGenerator
                         weight1 = (1.0F / minSqrDist1) / (totalDist),
                         boneIndex2 = minIndex2,
                         weight2 = (1.0F / minSqrDist2) / (totalDist),
-                        boneIndex3 = minIndex3,
-                        weight3 = (1.0F / minSqrDist3) / (totalDist),
+                        //boneIndex3 = minIndex3,
+                        //weight3 = (1.0F / minSqrDist3) / (totalDist),
                     };
 
                     riggedSlice.BoneWeights[vertexIndex] = boneWeight;

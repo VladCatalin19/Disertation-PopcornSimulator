@@ -295,7 +295,17 @@ PrefabInstance:
         type: 3}
     - target: {fileID: 6871537033949881329, guid: db942f9f28d91f746b921af2dbdcf8b2,
         type: 3}
+      propertyPath: m_UseGravity
+      value: 1
+      objectReference: {fileID: 0}
+    - target: {fileID: 6871537033949881329, guid: db942f9f28d91f746b921af2dbdcf8b2,
+        type: 3}
       propertyPath: m_Constraints
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 6871537033949881329, guid: db942f9f28d91f746b921af2dbdcf8b2,
+        type: 3}
+      propertyPath: m_IsKinematic
       value: 0
       objectReference: {fileID: 0}
     m_RemovedComponents: []
@@ -828,6 +838,21 @@ MonoBehaviour:
   kernelSpawnPositionsParend: {fileID: 752309059}
   kernelsParent: {fileID: 752309059}
   numberOfKernelsText: {fileID: 0}
+  generatorProperties:
+    minExpansionTime: 0.1
+    maxExpansionTime: 0.4
+    microsecondsToYield: 1200
+    curveDirectionMaxMagnitude: 0.9
+    curveDirectionCutoffPercent: 3
+    animationJitter: 0.3
+    jumpForceConeAngle: 30
+    minJumpForce: 3
+    maxJumpForce: 5
+    minAngularVelocity: 0.1
+    maxAngularVelocity: 0.3
+  coroutinesPerFrame: 10
+  coroutinesDecrementLevel: 2
+  minCoroutinesPerFramesAfterExpansionsFinished: 10
   popcornGenerators:
   - {fileID: 58984522}
 --- !u!1 &568722813
