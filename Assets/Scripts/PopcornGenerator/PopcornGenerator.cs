@@ -23,9 +23,6 @@ namespace PopcornGenerator
 
         private Stopwatch stopWatch = null;
 
-        public Lumpn.Threading.IThread UnityThread { get; set; }
-        public Lumpn.Threading.IThread WorkerThread  { get; set; }
-
         public PopcornGeneratorProperties GeneratorProperties { get; set; }
 
         private Plane[] cuttingPlanes = null;
@@ -67,7 +64,6 @@ namespace PopcornGenerator
             MeshFilter kernelMeshFilter = kernel.GetComponent<MeshFilter>();
             MeshRenderer kernelMeshRenderer = kernel.GetComponent<MeshRenderer>();
 
-            //yield return WorkerThread.Context;
             ++frames;
             yield return null;
             LogStageName($"Allocating mesh");
@@ -127,8 +123,6 @@ namespace PopcornGenerator
                 yield return null;
             }
             LogStageName($"Rigger done. Rigged slices: {riggedSlices.Count}");
-
-            //yield return UnityThread.Context;
 
             LogStageName($"Mesh Processing start");
             while (meshProcessingEnumerator.MoveNext())

@@ -17,17 +17,6 @@ namespace PopcornGenerator
         [Space]
         [Header("Kernel properties")]
         [SerializeField] private PopcornGeneratorProperties generatorProperties;
-        //[SerializeField] private float minExpansionTime = 0.1F;
-        //[SerializeField] private float maxExpansionTime = 0.3F;
-        //[SerializeField] private long microsecondsToYield = 1_200L;
-        //[SerializeField] private float curveDirectionMaxMagnitude = 0.9F;
-        //[SerializeField] private float curveDirectionCutoffPercent = 3.0F;
-        //[SerializeField] private float jumpForceConeAngle = 30.0F;
-        //[SerializeField] private float minJumpForce = 3.0F;
-        //[SerializeField] private float maxJumpForce = 5.0F;
-        //[SerializeField] private float animationJitter = 0.3F;
-        //[SerializeField] private float minAngularVelocity = 0.01F;
-        //[SerializeField] private float maxAngularVelocity = 0.02F;
         [Space]
         [Header("Coroutines")]
         [SerializeField] private int coroutinesPerFrame = 10;
@@ -42,9 +31,6 @@ namespace PopcornGenerator
         private int kernelsSpawned = 0;
         private bool didPopcorn = false;
 
-        //private Lumpn.Threading.IThread unityThread = null;
-        //private Lumpn.Threading.IThread[] workerThreads = null;
-
         private List<IEnumerator> popcornGeneratorsCoroutines = null;
         private int coroutinesFinished = 0;
         private int lastIndex = 0;
@@ -58,27 +44,10 @@ namespace PopcornGenerator
                 kernelSpawnPositions[spawnPositionIndex] = kernelSpawnPositionsParend.GetChild(spawnPositionIndex);
             }
 
-            //popcornGenerators = new PopcornGenerator[kernelsParent.childCount];
-            //for (int childIndex = 0; childIndex < kernelsParent.childCount; ++childIndex)
-            //{
-            //    popcornGenerators[childIndex] = kernelsParent.GetChild(childIndex).GetComponent<PopcornGenerator>();
-            //}
-
             if (popcornGenerators == null)
             {
                 popcornGenerators = new List<PopcornGenerator>();
             }
-            
-            //popcornGeneratorsCoroutines = new List<IEnumerator>(popcornGenerators.Count);
-
-            //unityThread = Lumpn.Threading.ThreadUtils.StartUnityThread("PopcornGeneratorManager", kernelsParent.childCount, this);
-
-            //workerThreads = new Lumpn.Threading.IThread[kernelsParent.childCount];
-            //for (int threadIndex = 0; threadIndex < workerThreads.Length; ++threadIndex)
-            //{
-            //    workerThreads[threadIndex] = Lumpn.Threading.ThreadUtils.StartWorkerThread("worker", threadIndex.ToString(),
-            //                                                                               System.Threading.ThreadPriority.Normal, 1);
-            //}
         }
 
         private void Update()
@@ -87,7 +56,7 @@ namespace PopcornGenerator
             bool shouldMakePopcornSequencial = Input.GetButtonDown("SequencialPop");
             bool shouldMakePopcornNormally = Input.GetButtonDown("NormalPop");
             bool shouldMakePopcornRandomly = Input.GetButtonDown("RandomPop");
-            bool shouldMakePopcornManaged = Input.GetKeyDown(KeyCode.P);
+            bool shouldMakePopcornManaged = Input.GetButtonDown("ManagedPop");
             bool shouldMakePopcorn = shouldMakePopcornNormally || shouldMakePopcornRandomly || shouldMakePopcornSequencial || shouldMakePopcornManaged;
 
             if (shouldSpawnKernels)
@@ -137,20 +106,11 @@ namespace PopcornGenerator
                     popcornGeneratorsCoroutines = new List<IEnumerator>(popcornGenerators.Count);
                 }
 
-                //MakePopcornSequencial();
-                //print($"Making popcorn!");
-                //foreach (PopcornGenerator popcornGenerator in popcornGenerators)
                 for (int popcornGeneratorIndex = 0; popcornGeneratorIndex < popcornGenerators.Count; ++popcornGeneratorIndex)
                 {
-                    //ThreadPool.QueueUserWorkItem(popcornGenerator.MakePopcornWaitCallback);
-                    //StartCoroutine(popcornGenerator.MakePopcornCoroutine());
-
                     var popcornGenerator = popcornGenerators[popcornGeneratorIndex];
-                    //popcornGenerator.UnityThread = unityThread;
-                    //popcornGenerator.WorkerThread = workerThreads[popcornGeneratorIndex];
 
                     popcornGenerator.GeneratorProperties = generatorProperties;
-                    //Time.timeScale = 0.3F;
 
                     var middlePartExpander = popcornGenerator.GetComponentInChildren<TempMiddlePartExpander>();
                     if ((bool)middlePartExpander)
@@ -183,15 +143,6 @@ namespace PopcornGenerator
 
                 didPopcorn = true;
             }
-        }
-
-        private void OnDestroy()
-        {
-            //Lumpn.Threading.ThreadUtils.StopThread(unityThread);
-            //foreach (var thread in workerThreads)
-            //{
-            //    Lumpn.Threading.ThreadUtils.StopThread(thread);
-            //}
         }
 
         private IEnumerator WaitAndMakePopcorn(PopcornGenerator popcornGenerator)
