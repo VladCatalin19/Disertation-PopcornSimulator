@@ -16,8 +16,8 @@ The program takes a 3D model of a popcorn kernel and transforms it into popcorn.
 
 ## References
 
-Ezy-Slice: https://github.com/DavidArayan/ezy-slice
-Kernel Model: https://sketchfab.com/3d-models/corn-kernel-284db06b8d094a6382c62913083335d7
-Kitchen Model: https://sketchfab.com/3d-models/kitchen-a7403be7a6cf4251b9b6fec4420e1b98
-Pot Models: https://sketchfab.com/3d-models/pots-and-pans-kitchen-set-8fcb576caba0460b903a562e889a37b3
-Popcorn Machine Model: https://sketchfab.com/3d-models/popcorn-machine-0dac52e077044a5997610dfe6a905331
+Ezy-Slice: <https://github.com/DavidArayan/ezy-slice>\
+Kernel Model: <https://sketchfab.com/3d-models/corn-kernel-284db06b8d094a6382c62913083335d7>\
+Kitchen Model: <https://sketchfab.com/3d-models/kitchen-a7403be7a6cf4251b9b6fec4420e1b98>\
+Pot Models: <https://sketchfab.com/3d-models/pots-and-pans-kitchen-set-8fcb576caba0460b903a562e889a37b3>\
+Popcorn Machine Model: <https://sketchfab.com/3d-models/popcorn-machine-0dac52e077044a5997610dfe6a905331>
